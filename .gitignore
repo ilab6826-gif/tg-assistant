@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+credentials.json
+reminders.sqlite
+.DS_Store
