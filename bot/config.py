@@ -26,6 +26,14 @@ GOOGLE_SHEET_ID = _require("GOOGLE_SHEET_ID")
 GOOGLE_SHEET_WORKSHEET = os.getenv("GOOGLE_SHEET_WORKSHEET", "Заказы")
 GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 
+# На хостинге (Railway и т.п.) сам credentials.json обычно не деплоится (он в
+# .gitignore). Если задана переменная GOOGLE_CREDENTIALS_JSON с полным
+# содержимым файла — материализуем его на диск при старте.
+_google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if _google_credentials_json and not os.path.exists(GOOGLE_CREDENTIALS_FILE):
+    with open(GOOGLE_CREDENTIALS_FILE, "w") as _f:
+        _f.write(_google_credentials_json)
+
 TIMEZONE = os.getenv("TIMEZONE", "Europe/Moscow")
 
 OWN_CHANNEL_DESCRIPTION = os.getenv(
