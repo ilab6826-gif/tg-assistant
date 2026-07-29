@@ -137,6 +137,22 @@ def process_message(user_text: str, conversation_history: list = None) -> dict:
     return {"type": "reply", "text": "\n".join(text_parts).strip() or "Не понял вопрос, уточни, пожалуйста."}
 
 
+def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
+    """
+    Расшифровывает голосовое сообщение в текст через Gemini (аудио подаётся
+    как обычный input наравне с текстом). Возвращает только сам текст.
+    """
+    model = genai.GenerativeModel(model_name=config.GEMINI_MODEL)
+    response = model.generate_content(
+        [
+            {"mime_type": mime_type, "data": audio_bytes},
+            "Расшифруй это голосовое сообщение дословно, на языке говорящего. "
+            "В ответе верни только сам расшифрованный текст, без кавычек и пояснений.",
+        ]
+    )
+    return response.text.strip()
+
+
 def _own_channel_context() -> str:
     """
     Подгружает свежие посты собственного канала (OWN_CHANNEL_USERNAME) для сравнения.
