@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PROJECT — Трекер заказов</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<div class="app">
+
+  <header class="header">
+    <div class="brand">
+      <span class="brand-mark">P</span>
+      <div class="brand-text">
+        <span class="brand-name">PROJECT</span>
+        <span class="brand-sub">Трекер заказов</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="view-stack">
+
+    <!-- ================= СПИСОК / ГЛАВНЫЙ ЭКРАН ================= -->
+    <section id="view-list" class="view view-list is-active">
+
+      <form id="search-form" class="search-form" autocomplete="off">
+        <div class="search-field">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <input id="order-input" type="text" inputmode="text" placeholder="Номер заказа, например A1042" maxlength="16" autocapitalize="characters">
+        </div>
+        <button id="search-btn" type="submit" class="btn-primary">
+          <span class="btn-label">Проверить статус</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+      </form>
+
+      <p id="search-error" class="search-error"></p>
+
+      <div id="orders-section" class="orders-section">
+        <div class="orders-heading">
+          <span>Мои заказы</span>
+          <span id="orders-count" class="orders-count"></span>
+        </div>
+        <div id="orders-list" class="orders-list"></div>
+      </div>
+
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <p class="empty-title">Пока нет отслеживаемых заказов</p>
+        <p class="empty-sub">Введите номер заказа выше — мы покажем, на каком он этапе</p>
+      </div>
+
+    </section>
+
+    <!-- ================= ДЕТАЛЬНЫЙ ЭКРАН ЗАКАЗА ================= -->
+    <section id="view-detail" class="view view-detail">
+
+      <button id="back-btn" class="back-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Все заказы</span>
+      </button>
+
+      <div class="order-card">
+        <div class="order-card-row">
+          <span class="order-number" id="detail-number">—</span>
+          <span class="order-status-pill" id="detail-status-pill">—</span>
+        </div>
+        <p class="order-product" id="detail-product">—</p>
+      </div>
+
+      <ol id="stepper" class="stepper"></ol>
+
+    </section>
+
+  </main>
+
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

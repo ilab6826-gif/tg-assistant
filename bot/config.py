@@ -36,6 +36,9 @@ if _google_credentials_json and not os.path.exists(GOOGLE_CREDENTIALS_FILE):
 
 TIMEZONE = os.getenv("TIMEZONE", "Europe/Moscow")
 
+# Порт для встроенного API трекера заказов (Railway сам подставляет $PORT).
+PORT = os.getenv("PORT", "8080")
+
 OWN_CHANNEL_DESCRIPTION = os.getenv(
     "OWN_CHANNEL_DESCRIPTION",
     "Сервис доставки товаров из Китая.",
@@ -46,3 +49,18 @@ OWN_CHANNEL_DESCRIPTION = os.getenv(
 OWN_CHANNEL_USERNAME = "www_pr0ject"
 
 GEMINI_MODEL = "gemini-flash-latest"
+
+# Ссылка на Telegram Mini App (страница трекера заказов), открывается кнопкой
+# "Отследить заказ" в боте. Должна быть https-ссылкой (требование Telegram WebApp).
+# Пока фронтенд не задеплоен - можно оставить пустым, кнопка просто не покажется.
+MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+
+# 6 этапов трекера заказа, индекс списка + 1 = число в колонке "Статус".
+ORDER_STATUSES = [
+    "Товар выкуплен",
+    "Прибыл на склад в Китае",
+    "Едет Китай → Москва",
+    "Прибыл в Москву",
+    "Передан в доставку",
+    "Доставлен",
+]

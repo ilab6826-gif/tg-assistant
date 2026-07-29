@@ -1,17 +1,30 @@
 import asyncio
 import logging
+import threading
+from typing import Optional
 
+import uvicorn
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message
+from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
 
-from bot import config, scheduler, gemini_service, sheets_service, channel_analyzer, memory_service
+from bot import api, config, scheduler, gemini_service, sheets_service, channel_analyzer, memory_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+
+def _track_order_keyboard() -> Optional[ReplyKeyboardMarkup]:
+    """Клавиатура с кнопкой открытия Mini App трекера заказов, либо None, если MINI_APP_URL не задан."""
+    if not config.MINI_APP_URL:
+        return None
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📦 Отследить заказ", web_app=WebAppInfo(url=config.MINI_APP_URL))]],
+        resize_keyboard=True,
+    )
 
 
 @dp.message(CommandStart())
@@ -22,6 +35,7 @@ async def on_start(message: Message) -> None:
         "«напомни завтра в 12:00 обработать заказ»\n\n"
         "📦 Записывать заказы в таблицу — опиши заказ свободным текстом:\n"
         "«@ivanov заказал кроссовки Nike, 42 размер, чёрные, Иванов Иван»\n\n"
+        "🔄 Менять статус заказа — «статус A1042 = 3»\n\n"
         "🔍 Разбирать конкурентов/рекламные каналы — просто пришли ссылку на канал\n"
         "(например t.me/somechannel)\n\n"
         "🎙 Понимаю и голосовые сообщения — просто наговори то же самое голосом\n\n"
@@ -29,10 +43,23 @@ async def on_start(message: Message) -> None:
         "/reminders — список активных напоминаний\n"
         "/cancel <номер> — отменить напоминание из списка\n"
         "/orders_today — сколько заказов добавлено сегодня\n"
-        "/stats — сводка заказов за последние 7 дней\n\n"
+        "/stats — сводка заказов за последние 7 дней\n"
+        "/track — открыть трекер заказов (Mini App)\n\n"
         f"Твой chat_id: {message.chat.id} — сохрани его в переменную OWNER_CHAT_ID, "
         "если хочешь получать напоминания и уведомления именно сюда."
     )
+    keyboard = _track_order_keyboard()
+    if keyboard:
+        await message.answer("Клиент может отслеживать свой заказ здесь:", reply_markup=keyboard)
+
+
+@dp.message(Command("track"))
+async def on_track(message: Message) -> None:
+    keyboard = _track_order_keyboard()
+    if not keyboard:
+        await message.answer("⚠️ Трекер заказов ещё не настроен (не задан MINI_APP_URL).")
+        return
+    await message.answer("Нажми кнопку, чтобы отследить заказ по номеру:", reply_markup=keyboard)
 
 
 @dp.message(Command("reminders"))
@@ -129,14 +156,38 @@ async def _handle_text(message: Message, text: str) -> None:
         )
 
     elif result["type"] == "order":
-        sheets_service.append_order(
-            username=result.get("username", ""),
-            product=result.get("product", ""),
-            size=result.get("size", ""),
-            color=result.get("color", ""),
-            full_name=result.get("full_name", ""),
-        )
-        reply_text = "✅ Заказ записан в таблицу."
+        try:
+            order_number = sheets_service.generate_order_number()
+            sheets_service.append_order(
+                username=result.get("username", ""),
+                product=result.get("product", ""),
+                size=result.get("size", ""),
+                color=result.get("color", ""),
+                full_name=result.get("full_name", ""),
+                order_number=order_number,
+            )
+        except Exception:
+            logger.exception("Ошибка при записи заказа в таблицу")
+            reply_text = "⚠️ Не получилось записать заказ, попробуй ещё раз."
+        else:
+            reply_text = (
+                f"✅ Заказ записан в таблицу.\n"
+                f"Номер заказа: {order_number} — передай его клиенту."
+            )
+
+    elif result["type"] == "change_status":
+        order_number = result.get("order_number", "")
+        try:
+            product = sheets_service.change_order_status(order_number, result.get("new_status"))
+        except ValueError as e:
+            reply_text = f"⚠️ {e}"
+        except Exception:
+            logger.exception("Ошибка при изменении статуса заказа")
+            reply_text = "⚠️ Не получилось изменить статус, попробуй позже."
+        else:
+            new_status = int(result.get("new_status"))
+            status_label = config.ORDER_STATUSES[new_status - 1]
+            reply_text = f"✅ Статус заказа {order_number} ({product}) обновлён: {new_status} — {status_label}."
 
     else:
         reply_text = result["text"]
@@ -171,8 +222,16 @@ async def on_text(message: Message) -> None:
     await _handle_text(message, message.text)
 
 
+def _run_api_server() -> None:
+    """Поднимает FastAPI (трекер заказов) в отдельном потоке на порту из $PORT."""
+    port = int(config.PORT)
+    logger.info("Запускаю API-сервер трекера заказов на порту %s...", port)
+    uvicorn.run(api.app, host="0.0.0.0", port=port, log_level="warning")
+
+
 async def main() -> None:
     scheduler.init(bot)
+    threading.Thread(target=_run_api_server, daemon=True).start()
     logger.info("Бот запущен, ожидаю сообщения...")
     await dp.start_polling(bot)
 
