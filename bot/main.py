@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-from bot import config, scheduler, gemini_service, sheets_service, channel_analyzer
+from bot import config, scheduler, gemini_service, sheets_service, channel_analyzer, memory_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,7 +50,8 @@ async def on_channel_link(message: Message) -> None:
 
 @dp.message(F.text)
 async def on_text(message: Message) -> None:
-    result = gemini_service.process_message(message.text)
+    history = memory_service.get_history(message.chat.id)
+    result = gemini_service.process_message(message.text, conversation_history=history)
 
     if result["type"] == "reminder":
         run_date = scheduler.add_reminder(
@@ -58,7 +59,7 @@ async def on_text(message: Message) -> None:
             remind_at_iso=result["remind_at"],
             text=result["text"],
         )
-        await message.answer(
+        reply_text = (
             f"✅ Напомню: «{result['text']}»\n"
             f"Когда: {run_date.strftime('%d.%m.%Y в %H:%M')}"
         )
@@ -71,10 +72,14 @@ async def on_text(message: Message) -> None:
             color=result.get("color", ""),
             full_name=result.get("full_name", ""),
         )
-        await message.answer("✅ Заказ записан в таблицу.")
+        reply_text = "✅ Заказ записан в таблицу."
 
     else:
-        await message.answer(result["text"])
+        reply_text = result["text"]
+
+    await message.answer(reply_text)
+    memory_service.add_message(message.chat.id, "user", message.text)
+    memory_service.add_message(message.chat.id, "model", reply_text)
 
 
 async def main() -> None:

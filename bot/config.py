@@ -33,4 +33,8 @@ OWN_CHANNEL_DESCRIPTION = os.getenv(
     "Сервис доставки товаров из Китая.",
 )
 
+# Жёстко зашит в код (а не в .env), чтобы бот всегда знал свой канал,
+# даже если переменная окружения потеряется.
+OWN_CHANNEL_USERNAME = "www_pr0ject"
+
 GEMINI_MODEL = "gemini-flash-latest"

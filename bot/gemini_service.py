@@ -6,14 +6,17 @@
 ответить как обычный ассистент. Для этого используется function calling:
 Gemini сам выбирает вызвать нужный "инструмент" с нужными аргументами.
 """
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import google.generativeai as genai
 
-from bot import config
+from bot import channel_analyzer, config
 
 genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
+
+logger = logging.getLogger(__name__)
 
 TOOLS = [
     {
@@ -78,6 +81,12 @@ SYSTEM_PROMPT = """Ты — личный ассистент владельца �
 3. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
    кратко и по делу, без лишней воды.
 
+Есть и третья возможность, которая обрабатывается отдельно от тебя (не через
+tool calling): если пользователь присылает ссылку на Telegram-канал (t.me/...)
+или юзернейм канала, бот автоматически разбирает его посты и присылает анализ
+конкурента/рекламной площадки. Если пользователь спрашивает, что ты умеешь —
+обязательно упомяни и эту возможность тоже, наряду с напоминаниями и заказами.
+
 Текущая дата и время пользователя: {now}.
 Если пользователь называет время без даты ("в 12:00", "через час") — считай, что это
 ближайшее будущее относительно текущего времени.
@@ -89,19 +98,30 @@ def _now_str() -> str:
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S (%A)")
 
 
-def process_message(user_text: str) -> dict:
+def process_message(user_text: str, conversation_history: list = None) -> dict:
     """
     Отправляет сообщение в Gemini и возвращает результат в виде словаря:
     {"type": "reminder", "remind_at": ..., "text": ...}
     {"type": "order", "username": ..., "product": ..., ...}
     {"type": "reply", "text": "..."}
+
+    conversation_history: предыдущие реплики чата в хронологическом порядке
+    [{"role": "user"|"model", "text": "..."}, ...] — используется как контекст,
+    чтобы Gemini "помнил" предыдущую переписку.
     """
     model = genai.GenerativeModel(
         model_name=config.GEMINI_MODEL,
         system_instruction=SYSTEM_PROMPT.format(now=_now_str()),
         tools=TOOLS,
     )
-    response = model.generate_content(user_text)
+
+    contents = [
+        {"role": msg["role"], "parts": [msg["text"]]}
+        for msg in (conversation_history or [])
+    ]
+    contents.append({"role": "user", "parts": [user_text]})
+
+    response = model.generate_content(contents)
 
     parts = response.candidates[0].content.parts
     for part in parts:
@@ -117,26 +137,53 @@ def process_message(user_text: str) -> dict:
     return {"type": "reply", "text": "\n".join(text_parts).strip() or "Не понял вопрос, уточни, пожалуйста."}
 
 
+def _own_channel_context() -> str:
+    """
+    Подгружает свежие посты собственного канала (OWN_CHANNEL_USERNAME) для сравнения.
+    Если не получилось (канал приватный, Telegram отдал ошибку и т.п.) — откатывается
+    на статичное текстовое описание OWN_CHANNEL_DESCRIPTION из .env.
+    """
+    try:
+        own_posts = channel_analyzer.fetch_channel_posts(config.OWN_CHANNEL_USERNAME)
+        logger.info(
+            "Подгрузил свежие посты собственного канала @%s для сравнения (%d символов)",
+            config.OWN_CHANNEL_USERNAME,
+            len(own_posts),
+        )
+        return f'Реальные последние посты моего канала @{config.OWN_CHANNEL_USERNAME}:\n{own_posts}'
+    except Exception:
+        logger.warning(
+            "Не удалось загрузить посты собственного канала @%s, "
+            "использую запасное текстовое описание из .env",
+            config.OWN_CHANNEL_USERNAME,
+            exc_info=True,
+        )
+        return f'Моё описание своего канала (не удалось загрузить актуальные посты):\n"{config.OWN_CHANNEL_DESCRIPTION}"'
+
+
 def analyze_channel(channel_posts_text: str, channel_name: str) -> str:
     """
-    Анализирует посты стороннего Telegram-канала в сравнении с описанием
-    собственного канала и возвращает текстовый разбор (плюсы/минусы).
+    Анализирует посты стороннего Telegram-канала в сравнении с собственным каналом
+    и возвращает текстовый разбор (плюсы/минусы).
     """
-    prompt = f"""Вот последние посты Telegram-канала "{channel_name}" (конкурент или рекламная площадка):
+    own_channel_context = _own_channel_context()
 
+    prompt = f"""Проанализируй чужой Telegram-канал "{channel_name}" (конкурент или рекламная площадка)
+в сравнении с моим собственным каналом.
+
+Посты канала "{channel_name}":
 ---
 {channel_posts_text}
 ---
 
-Моё описание своего канала:
-"{config.OWN_CHANNEL_DESCRIPTION}"
+{own_channel_context}
 
-Проанализируй этот канал и дай краткий структурированный разбор:
-1. Чем занимается канал / его позиционирование
-2. Сильные стороны (кратко, 3-5 пунктов)
-3. Слабые стороны (кратко, 3-5 пунктов)
-4. Мои плюсы и минусы на фоне этого канала
-5. Если это может быть рекламной площадкой — стоит ли рассмотреть для рекламы и почему
+Дай краткий структурированный разбор именно канала "{channel_name}" (не моего):
+1. Чем занимается канал "{channel_name}" / его позиционирование
+2. Сильные стороны канала "{channel_name}" (кратко, 3-5 пунктов)
+3. Слабые стороны канала "{channel_name}" (кратко, 3-5 пунктов)
+4. Мои плюсы и минусы (моего канала) на фоне канала "{channel_name}"
+5. Если канал "{channel_name}" может быть рекламной площадкой — стоит ли рассмотреть его для рекламы и почему
 
 Отвечай кратко и по делу, без длинных вступлений."""
 

@@ -4,4 +4,6 @@ __pycache__/
 .env
 credentials.json
 reminders.sqlite
+conversation_history.sqlite
 .DS_Store
+bot.log
