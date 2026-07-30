@@ -3,10 +3,6 @@
 
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const API_BASE = "/api";
-  const STORAGE_KEY = "tracked_orders";
-  const MAX_TRACKED = 25;
-
-  // ---------- Telegram WebApp bootstrap ----------
 
   if (tg) {
     tg.ready();
@@ -27,78 +23,51 @@
     }
   }
 
-  // ---------- Storage (CloudStorage with localStorage fallback) ----------
-  // telegram-web-app.js exposes window.Telegram.WebApp even outside a real
-  // Telegram client (a version "6.0" stub), where CloudStorage methods throw
-  // synchronously instead of just failing gracefully - so both a version
-  // check and a try/catch are needed to safely fall back to localStorage.
-
-  function cloudStorageAvailable() {
-    if (!tg || !tg.CloudStorage) return false;
-    if (tg.isVersionAtLeast && !tg.isVersionAtLeast("6.9")) return false;
-    return true;
+  function initData() {
+    return tg && tg.initData ? tg.initData : "";
   }
 
-  function readLocal() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch (e) { return []; }
+  function unsafeUser() {
+    return tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
   }
 
-  function writeLocal(value) {
-    try { localStorage.setItem(STORAGE_KEY, value); } catch (e) {}
-  }
+  // ---------- DOM ----------
 
-  const storage = {
-    get() {
-      return new Promise((resolve) => {
-        if (!cloudStorageAvailable()) return resolve(readLocal());
-        try {
-          tg.CloudStorage.getItem(STORAGE_KEY, (err, value) => {
-            if (err || !value) return resolve(readLocal());
-            try { resolve(JSON.parse(value)); } catch (e) { resolve([]); }
-          });
-        } catch (e) {
-          resolve(readLocal());
-        }
-      });
-    },
-    set(list) {
-      const value = JSON.stringify(list.slice(0, MAX_TRACKED));
-      writeLocal(value);
-      return new Promise((resolve) => {
-        if (!cloudStorageAvailable()) return resolve();
-        try {
-          tg.CloudStorage.setItem(STORAGE_KEY, value, () => resolve());
-        } catch (e) {
-          resolve();
-        }
-      });
-    },
-  };
-
-  // ---------- DOM refs ----------
+  const heroGreeting = document.getElementById("hero-greeting");
+  const refreshBtn = document.getElementById("refresh-btn");
+  const loadingState = document.getElementById("loading-state");
+  const ordersSection = document.getElementById("orders-section");
+  const ordersList = document.getElementById("orders-list");
+  const ordersCount = document.getElementById("orders-count");
+  const emptyState = document.getElementById("empty-state");
+  const emptySub = document.getElementById("empty-sub");
+  const usernameHint = document.getElementById("username-hint");
 
   const searchForm = document.getElementById("search-form");
   const orderInput = document.getElementById("order-input");
   const searchBtn = document.getElementById("search-btn");
   const searchError = document.getElementById("search-error");
 
-  const ordersSection = document.getElementById("orders-section");
-  const ordersList = document.getElementById("orders-list");
-  const ordersCount = document.getElementById("orders-count");
-  const emptyState = document.getElementById("empty-state");
-
   const viewList = document.getElementById("view-list");
   const viewDetail = document.getElementById("view-detail");
   const backBtn = document.getElementById("back-btn");
 
-  const detailNumber = document.getElementById("detail-number");
-  const detailProduct = document.getElementById("detail-product");
-  const detailStatusPill = document.getElementById("detail-status-pill");
-  const stepperEl = document.getElementById("stepper");
+  const gallery = document.getElementById("gallery");
+  const galleryTrack = document.getElementById("gallery-track");
+  const galleryDots = document.getElementById("gallery-dots");
+  const galleryCounter = document.getElementById("gallery-counter");
 
+  const detailNumber = document.getElementById("detail-number");
+  const detailMeta = document.getElementById("detail-meta");
+  const itemsList = document.getElementById("items-list");
+  const itemsCount = document.getElementById("items-count");
+  const detailStatusPill = document.getElementById("detail-status-pill");
+  const progressPercent = document.getElementById("progress-percent");
+  const progressFill = document.getElementById("progress-fill");
+  const stepperEl = document.getElementById("stepper");
   const toastEl = document.getElementById("toast");
 
-  let trackedNumbers = [];
+  let cachedOrders = [];
   let toastTimer = null;
 
   // ---------- Toast ----------
@@ -112,6 +81,16 @@
 
   // ---------- API ----------
 
+  async function fetchMyOrders() {
+    const headers = {};
+    const data = initData();
+    if (data) headers["X-Telegram-Init-Data"] = data;
+
+    const res = await fetch(`${API_BASE}/my-orders`, { headers });
+    if (!res.ok) throw new Error("network");
+    return res.json();
+  }
+
   async function fetchOrderStatus(orderNumber) {
     const res = await fetch(`${API_BASE}/status/${encodeURIComponent(orderNumber)}`);
     if (res.status === 404) return { notFound: true };
@@ -119,17 +98,20 @@
     return res.json();
   }
 
-  // ---------- View switching ----------
+  // ---------- Views ----------
 
   function showListView() {
     viewDetail.classList.remove("is-active");
     viewList.classList.add("is-active");
+    document.body.classList.remove("is-detail");
     if (tg && tg.BackButton) tg.BackButton.hide();
   }
 
   function showDetailView() {
     viewList.classList.remove("is-active");
     viewDetail.classList.add("is-active");
+    document.body.classList.add("is-detail");
+    window.scrollTo({ top: 0, behavior: "instant" });
     if (tg && tg.BackButton) {
       tg.BackButton.show();
       tg.BackButton.onClick(showListView);
@@ -138,15 +120,38 @@
 
   backBtn.addEventListener("click", () => { haptic("light"); showListView(); });
 
-  // ---------- Stepper rendering ----------
+  // ---------- Rendering ----------
 
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const BOX_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function statusStateClass(status, total) {
+    if (status >= total) return "is-done";
+    if (status <= 1) return "";
+    return "is-active";
+  }
+
+  function formatDate(isoLike) {
+    if (!isoLike) return "";
+    const parts = isoLike.split(" ");
+    if (parts.length < 1) return isoLike;
+    const [datePart] = parts;
+    const [y, m, d] = datePart.split("-");
+    if (!y || !m || !d) return isoLike;
+    return `${d}.${m}.${y}`;
+  }
 
   function renderStepper(order) {
     const statuses = order.statuses || [];
     const current = order.status;
-
     stepperEl.innerHTML = "";
+
     statuses.forEach((label, idx) => {
       const stepNum = idx + 1;
       const li = document.createElement("li");
@@ -170,33 +175,229 @@
     });
   }
 
+  function plural(count, one, few, many) {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+  }
+
+  // ---------- Gallery ----------
+
+  function updateGalleryIndicator() {
+    const total = galleryTrack.children.length;
+    if (!total) return;
+    const width = galleryTrack.clientWidth || 1;
+    const index = Math.max(0, Math.min(total - 1, Math.round(galleryTrack.scrollLeft / width)));
+    galleryCounter.textContent = `${index + 1} / ${total}`;
+    Array.from(galleryDots.children).forEach((dot, i) => {
+      dot.classList.toggle("is-active", i === index);
+    });
+  }
+
+  let galleryTicking = false;
+  galleryTrack.addEventListener("scroll", () => {
+    if (galleryTicking) return;
+    galleryTicking = true;
+    requestAnimationFrame(() => {
+      galleryTicking = false;
+      updateGalleryIndicator();
+    });
+  }, { passive: true });
+
+  function renderGallery(photos) {
+    const list = photos || [];
+    galleryTrack.innerHTML = "";
+    galleryDots.innerHTML = "";
+    gallery.hidden = list.length === 0;
+    if (!list.length) return;
+
+    list.forEach((url, idx) => {
+      const slide = document.createElement("div");
+      slide.className = "gallery-slide";
+
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = `Фото товара ${idx + 1}`;
+      img.loading = idx === 0 ? "eager" : "lazy";
+      slide.appendChild(img);
+      galleryTrack.appendChild(slide);
+
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "gallery-dot";
+      dot.setAttribute("aria-label", `Фото ${idx + 1}`);
+      dot.addEventListener("click", () => {
+        haptic("light");
+        galleryTrack.scrollTo({ left: galleryTrack.clientWidth * idx, behavior: "smooth" });
+      });
+      galleryDots.appendChild(dot);
+    });
+
+    // Точек больше восьми в строку не влезает — там хватит и счётчика.
+    galleryDots.hidden = list.length < 2 || list.length > 8;
+    galleryCounter.hidden = list.length < 2;
+    galleryTrack.scrollLeft = 0;
+    updateGalleryIndicator();
+  }
+
+  // ---------- Order details ----------
+
+  function renderItems(items) {
+    const list = items || [];
+    itemsList.innerHTML = "";
+    itemsCount.textContent = list.length ? String(list.length) : "";
+
+    if (!list.length) {
+      const li = document.createElement("li");
+      li.className = "item-row is-empty";
+      li.textContent = "Состав заказа уточняется";
+      itemsList.appendChild(li);
+      return;
+    }
+
+    list.forEach((item, idx) => {
+      const meta = [];
+      if (item.size) meta.push(`Размер ${item.size}`);
+      if (item.color) meta.push(item.color);
+
+      const li = document.createElement("li");
+      li.className = "item-row";
+      li.style.animationDelay = `${idx * 55}ms`;
+      li.innerHTML = `
+        <span class="item-index">${idx + 1}</span>
+        <span class="item-body">
+          <span class="item-name">${escapeHtml(item.product || "Товар")}</span>
+          ${meta.length ? `<span class="item-meta">${escapeHtml(meta.join(" · "))}</span>` : ""}
+        </span>
+      `;
+      itemsList.appendChild(li);
+    });
+  }
+
   function renderDetail(order) {
+    const total = (order.statuses || []).length || 7;
+    const progress = Math.min(100, Math.round((order.status / total) * 100));
+    const items = order.items || [];
+
+    renderGallery(order.photos);
+
     detailNumber.textContent = order.order_number;
-    detailProduct.textContent = order.product || "Товар не указан";
     detailStatusPill.textContent = order.status_label || "";
-    detailStatusPill.classList.toggle("is-done", order.status >= (order.statuses || []).length);
+    detailStatusPill.classList.toggle("is-done", order.status >= total);
+
+    const metaParts = [];
+    if (items.length) {
+      metaParts.push(`${items.length} ${plural(items.length, "товар", "товара", "товаров")}`);
+    }
+    if (order.created_at) metaParts.push(`оформлен ${formatDate(order.created_at)}`);
+    detailMeta.textContent = metaParts.join(" · ");
+
+    renderItems(items);
+
+    progressPercent.textContent = `${progress}%`;
+    progressFill.style.width = `${progress}%`;
     renderStepper(order);
   }
 
-  async function openOrder(orderNumber, { fromSearch = false } = {}) {
-    try {
-      const order = await fetchOrderStatus(orderNumber);
-      if (order.notFound) {
-        if (fromSearch) showSearchError("Заказ с таким номером не найден");
-        return null;
-      }
-      renderDetail(order);
-      showDetailView();
-      haptic("medium");
-      return order;
-    } catch (e) {
-      if (fromSearch) showSearchError("Не получилось получить статус, попробуй ещё раз");
-      else showToast("Не удалось обновить статус заказа");
-      return null;
+  function openOrderDetail(order) {
+    renderDetail(order);
+    showDetailView();
+    haptic("medium");
+  }
+
+  function buildOrderItem(order) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "order-item";
+
+    const total = (order.statuses || []).length || 7;
+    const stateClass = statusStateClass(order.status, total);
+    const dotContent = order.status >= total ? CHECK_SVG : `<span>${order.status}</span>`;
+    const photos = order.photos || [];
+    const count = (order.items || []).length;
+
+    const preview = photos.length
+      ? `<img class="order-item-photo" src="${escapeHtml(photos[0])}" alt="" loading="lazy">`
+      : `<span class="order-item-photo is-empty">${BOX_SVG}</span>`;
+    const countChip = count > 1
+      ? `<span class="order-item-chip">${count} ${count > 4 ? "товаров" : "товара"}</span>`
+      : "";
+
+    item.innerHTML = `
+      <div class="order-item-lead">
+        ${preview}
+        <span class="order-item-badge ${stateClass}">${dotContent}</span>
+      </div>
+      <div class="order-item-body">
+        <div class="order-item-number">${escapeHtml(order.order_number)}${countChip}</div>
+        <div class="order-item-product">${escapeHtml(order.product || "Товар не указан")}</div>
+        <div class="order-item-status ${stateClass}">${escapeHtml(order.status_label || "")}</div>
+      </div>
+      <svg class="order-item-chevron" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    `;
+
+    item.addEventListener("click", () => {
+      haptic("light");
+      openOrderDetail(order);
+    });
+
+    return item;
+  }
+
+  function setLoading(isLoading) {
+    loadingState.classList.toggle("is-visible", isLoading);
+    refreshBtn.classList.toggle("is-spinning", isLoading);
+  }
+
+  function renderOrdersList(orders, { needsUsername = false } = {}) {
+    cachedOrders = orders;
+    const hasOrders = orders.length > 0;
+
+    ordersSection.classList.toggle("is-visible", hasOrders);
+    emptyState.classList.toggle("is-visible", !hasOrders && !needsUsername);
+    usernameHint.classList.toggle("is-visible", needsUsername);
+    ordersCount.textContent = hasOrders ? String(orders.length) : "";
+
+    ordersList.innerHTML = "";
+    orders.forEach((order, idx) => {
+      const el = buildOrderItem(order);
+      el.style.animationDelay = `${idx * 60}ms`;
+      ordersList.appendChild(el);
+    });
+
+    if (needsUsername) {
+      emptySub.textContent = "Задай @username в настройках Telegram — тогда заказы будут подтягиваться автоматически.";
+    } else if (!hasOrders) {
+      emptySub.textContent = "Когда менеджер оформит заказ на твой @username, он появится здесь автоматически.";
     }
   }
 
-  // ---------- Search form ----------
+  async function loadOrders({ silent = false } = {}) {
+    if (!silent) setLoading(true);
+    try {
+      const payload = await fetchMyOrders();
+      const user = payload.user || {};
+      const name = user.first_name || (unsafeUser() && unsafeUser().first_name) || "друг";
+      heroGreeting.textContent = `Привет, ${name}!`;
+      renderOrdersList(payload.orders || [], { needsUsername: !!payload.needs_username });
+      if (silent) showToast("Заказы обновлены");
+    } catch (e) {
+      if (!silent) {
+        renderOrdersList([]);
+        emptyState.classList.add("is-visible");
+        emptySub.textContent = "Не удалось загрузить заказы. Проверь интернет и попробуй обновить.";
+      } else {
+        showToast("Не удалось обновить");
+        notify("error");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ---------- Search by number (fallback) ----------
 
   function showSearchError(text) {
     searchError.textContent = text;
@@ -225,137 +426,28 @@
     searchBtn.classList.add("is-loading");
     searchBtn.disabled = true;
 
-    const order = await openOrder(value, { fromSearch: true });
-
-    searchBtn.classList.remove("is-loading");
-    searchBtn.disabled = false;
-
-    if (order) {
-      await addTrackedNumber(order.order_number);
-      orderInput.value = "";
-      renderOrdersList();
+    try {
+      const order = await fetchOrderStatus(value);
+      if (order.notFound) {
+        showSearchError("Заказ с таким номером не найден");
+      } else {
+        openOrderDetail(order);
+        orderInput.value = "";
+      }
+    } catch (err) {
+      showSearchError("Не получилось найти заказ, попробуй ещё раз");
+    } finally {
+      searchBtn.classList.remove("is-loading");
+      searchBtn.disabled = false;
     }
   });
 
-  // ---------- Tracked orders list ----------
-
-  async function addTrackedNumber(orderNumber) {
-    trackedNumbers = [orderNumber, ...trackedNumbers.filter((n) => n !== orderNumber)].slice(0, MAX_TRACKED);
-    await storage.set(trackedNumbers);
-  }
-
-  async function removeTrackedNumber(orderNumber) {
-    trackedNumbers = trackedNumbers.filter((n) => n !== orderNumber);
-    await storage.set(trackedNumbers);
-    renderOrdersList();
-    showToast(`Заказ ${orderNumber} убран из списка`);
-  }
-
-  function statusStateClass(status, total) {
-    if (status >= total) return "is-done";
-    if (status <= 1) return "";
-    return "is-active";
-  }
-
-  function buildOrderItem(orderNumber, data) {
-    const item = document.createElement("div");
-    item.className = "order-item";
-
-    if (!data || data.notFound) {
-      item.innerHTML = `
-        <div class="order-item-dot">?</div>
-        <div class="order-item-body">
-          <div class="order-item-number">${orderNumber}</div>
-          <div class="order-item-product">Заказ не найден</div>
-        </div>
-        <button class="order-item-remove" type="button" aria-label="Удалить">×</button>
-      `;
-    } else {
-      const total = (data.statuses || []).length || 6;
-      const stateClass = statusStateClass(data.status, total);
-      const dotContent = data.status >= total ? CHECK_SVG : `<span>${data.status}</span>`;
-      item.innerHTML = `
-        <div class="order-item-dot ${stateClass}">${dotContent}</div>
-        <div class="order-item-body">
-          <div class="order-item-number">${orderNumber}</div>
-          <div class="order-item-product">${escapeHtml(data.product || "Товар не указан")}</div>
-        </div>
-        <div class="order-item-status ${stateClass}">${data.status_label || ""}</div>
-        <button class="order-item-remove" type="button" aria-label="Удалить">×</button>
-      `;
-    }
-
-    item.addEventListener("click", (e) => {
-      if (e.target.closest(".order-item-remove")) return;
-      haptic("light");
-      openOrder(orderNumber);
-    });
-
-    item.querySelector(".order-item-remove").addEventListener("click", (e) => {
-      e.stopPropagation();
-      haptic("rigid");
-      removeTrackedNumber(orderNumber);
-    });
-
-    return item;
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  async function renderOrdersList() {
-    const hasOrders = trackedNumbers.length > 0;
-    ordersSection.classList.toggle("is-visible", hasOrders);
-    emptyState.classList.toggle("is-visible", !hasOrders);
-    ordersCount.textContent = hasOrders ? String(trackedNumbers.length) : "";
-
-    if (!hasOrders) {
-      ordersList.innerHTML = "";
-      return;
-    }
-
-    ordersList.innerHTML = "";
-    const skeletons = trackedNumbers.map((num) => {
-      const el = document.createElement("div");
-      el.className = "order-item";
-      el.style.opacity = "0.5";
-      el.innerHTML = `
-        <div class="order-item-dot">…</div>
-        <div class="order-item-body">
-          <div class="order-item-number">${num}</div>
-          <div class="order-item-product">Загрузка…</div>
-        </div>
-      `;
-      ordersList.appendChild(el);
-      return el;
-    });
-
-    const results = await Promise.all(
-      trackedNumbers.map((num) => fetchOrderStatus(num).catch(() => ({ notFound: true })))
-    );
-
-    ordersList.innerHTML = "";
-    trackedNumbers.forEach((num, idx) => {
-      const el = buildOrderItem(num, results[idx]);
-      el.style.animationDelay = `${idx * 60}ms`;
-      ordersList.appendChild(el);
-    });
-  }
+  refreshBtn.addEventListener("click", () => {
+    haptic("light");
+    loadOrders({ silent: true });
+  });
 
   // ---------- Init ----------
 
-  async function init() {
-    try {
-      trackedNumbers = await storage.get();
-      await renderOrdersList();
-    } catch (e) {
-      trackedNumbers = [];
-      emptyState.classList.add("is-visible");
-    }
-  }
-
-  init();
+  loadOrders();
 })();

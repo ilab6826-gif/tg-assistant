@@ -17,8 +17,22 @@ def _require(name: str) -> str:
     return value
 
 
+# Папка для файлов, которые должны переживать передеплой (базы SQLite).
+# На Railway сюда монтируется постоянный диск (volume), локально — корень проекта.
+DATA_DIR = os.getenv("DATA_DIR", ".")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def data_path(filename: str) -> str:
+    """Путь к файлу внутри постоянного хранилища."""
+    return os.path.join(DATA_DIR, filename)
+
+
 TELEGRAM_BOT_TOKEN = _require("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
+
+# Клиентский бот — только Mini App для отслеживания заказов (отдельный от ассистента).
+CLIENT_BOT_TOKEN = os.getenv("CLIENT_BOT_TOKEN", "")
 
 OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")  # может быть пустым при первом запуске
 
@@ -51,15 +65,23 @@ OWN_CHANNEL_USERNAME = "www_pr0ject"
 GEMINI_MODEL = "gemini-flash-latest"
 
 # Ссылка на Telegram Mini App (страница трекера заказов), открывается кнопкой
-# "Отследить заказ" в боте. Должна быть https-ссылкой (требование Telegram WebApp).
-# Пока фронтенд не задеплоен - можно оставить пустым, кнопка просто не покажется.
+# в клиентском боте. Должна быть https-ссылкой (требование Telegram WebApp).
 MINI_APP_URL = os.getenv("MINI_APP_URL", "")
 
-# 6 этапов трекера заказа, индекс списка + 1 = число в колонке "Статус".
+# Название бренда в Mini App.
+BRAND_NAME = os.getenv("BRAND_NAME", "PR0JECT")
+
+# Через сколько дней без смены статуса заказ считается зависшим.
+STUCK_ORDER_DAYS = int(os.getenv("STUCK_ORDER_DAYS", "10"))
+
+# Этапы трекера заказа, индекс списка + 1 = число в колонке "Статус".
+# Если меняешь список — не забудь про уже записанные заказы: вставка пункта
+# в середину сдвигает смысл всех номеров после него.
 ORDER_STATUSES = [
     "Товар выкуплен",
     "Прибыл на склад в Китае",
     "Едет Китай → Москва",
+    "Проходит таможенный досмотр",
     "Прибыл в Москву",
     "Передан в доставку",
     "Доставлен",

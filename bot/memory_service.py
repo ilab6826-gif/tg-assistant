@@ -6,7 +6,9 @@
 import sqlite3
 from contextlib import closing
 
-DB_PATH = "conversation_history.sqlite"
+from bot import config
+
+DB_PATH = config.data_path("conversation_history.sqlite")
 HISTORY_LIMIT = 10
 
 

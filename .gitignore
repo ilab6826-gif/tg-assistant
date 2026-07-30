@@ -5,5 +5,7 @@ __pycache__/
 credentials.json
 reminders.sqlite
 conversation_history.sqlite
+clients.sqlite
+photos/
 .DS_Store
 bot.log

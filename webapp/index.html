@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>PROJECT — Трекер заказов</title>
+<title>PR0JECT — Мои заказы</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -15,31 +15,28 @@
 
   <header class="header">
     <div class="brand">
-      <span class="brand-mark">P</span>
-      <div class="brand-text">
-        <span class="brand-name">PROJECT</span>
-        <span class="brand-sub">Трекер заказов</span>
-      </div>
+      <img class="brand-logo" src="logo.png" alt="PR0JECT">
+      <span class="brand-sub">Доставка из Китая</span>
     </div>
+    <button id="refresh-btn" class="icon-btn" type="button" aria-label="Обновить">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   </header>
+
+  <section class="hero">
+    <p class="hero-greeting" id="hero-greeting">Привет!</p>
+    <p class="hero-sub">Здесь все твои заказы и этапы доставки в реальном времени</p>
+  </section>
 
   <main class="view-stack">
 
-    <!-- ================= СПИСОК / ГЛАВНЫЙ ЭКРАН ================= -->
+    <!-- ================= СПИСОК ЗАКАЗОВ ================= -->
     <section id="view-list" class="view view-list is-active">
 
-      <form id="search-form" class="search-form" autocomplete="off">
-        <div class="search-field">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <input id="order-input" type="text" inputmode="text" placeholder="Номер заказа, например A1042" maxlength="16" autocapitalize="characters">
-        </div>
-        <button id="search-btn" type="submit" class="btn-primary">
-          <span class="btn-label">Проверить статус</span>
-          <span class="btn-spinner" aria-hidden="true"></span>
-        </button>
-      </form>
-
-      <p id="search-error" class="search-error"></p>
+      <div id="loading-state" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Загружаем заказы…</p>
+      </div>
 
       <div id="orders-section" class="orders-section">
         <div class="orders-heading">
@@ -53,13 +50,36 @@
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-        <p class="empty-title">Пока нет отслеживаемых заказов</p>
-        <p class="empty-sub">Введите номер заказа выше — мы покажем, на каком он этапе</p>
+        <p class="empty-title">Пока нет заказов</p>
+        <p class="empty-sub" id="empty-sub">Когда менеджер оформит заказ на твой @username, он появится здесь автоматически</p>
       </div>
+
+      <div id="username-hint" class="hint-card">
+        <div class="hint-icon">@</div>
+        <div class="hint-body">
+          <p class="hint-title">Нужен @username в Telegram</p>
+          <p class="hint-text">Чтобы видеть свои заказы, задай username в настройках Telegram. Менеджер указывает его при оформлении.</p>
+        </div>
+      </div>
+
+      <details class="lookup-panel">
+        <summary>Найти заказ по номеру</summary>
+        <form id="search-form" class="search-form" autocomplete="off">
+          <div class="search-field">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <input id="order-input" type="text" inputmode="text" placeholder="Например A1042" maxlength="16" autocapitalize="characters">
+          </div>
+          <button id="search-btn" type="submit" class="btn-secondary">
+            <span class="btn-label">Проверить</span>
+            <span class="btn-spinner" aria-hidden="true"></span>
+          </button>
+        </form>
+        <p id="search-error" class="search-error"></p>
+      </details>
 
     </section>
 
-    <!-- ================= ДЕТАЛЬНЫЙ ЭКРАН ЗАКАЗА ================= -->
+    <!-- ================= ДЕТАЛИ ЗАКАЗА ================= -->
     <section id="view-detail" class="view view-detail">
 
       <button id="back-btn" class="back-btn" type="button">
@@ -67,12 +87,34 @@
         <span>Все заказы</span>
       </button>
 
+      <section id="gallery" class="gallery" hidden>
+        <div id="gallery-track" class="gallery-track"></div>
+        <div class="gallery-bar">
+          <div id="gallery-dots" class="gallery-dots"></div>
+          <span id="gallery-counter" class="gallery-counter"></span>
+        </div>
+      </section>
+
       <div class="order-card">
         <div class="order-card-row">
           <span class="order-number" id="detail-number">—</span>
           <span class="order-status-pill" id="detail-status-pill">—</span>
         </div>
-        <p class="order-product" id="detail-product">—</p>
+        <p class="order-meta" id="detail-meta"></p>
+
+        <div class="items-heading">
+          <span>Состав заказа</span>
+          <span id="items-count" class="items-count"></span>
+        </div>
+        <ul id="items-list" class="items-list"></ul>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span>Прогресс доставки</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
       </div>
 
       <ol id="stepper" class="stepper"></ol>

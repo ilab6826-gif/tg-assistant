@@ -18,6 +18,38 @@ genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
 
 logger = logging.getLogger(__name__)
 
+# Описания этапов для Gemini собираются из config.ORDER_STATUSES, чтобы при
+# правке списка этапов не нужно было синхронизировать текст в двух местах.
+_STATUS_COUNT = len(config.ORDER_STATUSES)
+_STATUS_LIST = ", ".join(
+    f"{i} - {label}" for i, label in enumerate(config.ORDER_STATUSES, start=1)
+)
+
+# Один товар внутри заказа — схема общая для создания заказа и дозаказа.
+_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "product": {"type": "string", "description": "Название товара."},
+        "size": {"type": "string", "description": "Размер, если указан, иначе пустая строка."},
+        "color": {"type": "string", "description": "Цвет, если указан, иначе пустая строка."},
+        "cost_price": {
+            "type": "number",
+            "description": (
+                "Во сколько этот товар обошёлся тебе (закупка), если названо. "
+                "Например «закупка 4000» или «взял за 4000». 0, если не указано."
+            ),
+        },
+        "sale_price": {
+            "type": "number",
+            "description": (
+                "Сколько платит клиент за этот товар (продажа), если названо. "
+                "Например «продал за 7500». 0, если не указано."
+            ),
+        },
+    },
+    "required": ["product"],
+}
+
 TOOLS = [
     {
         "function_declarations": [
@@ -50,7 +82,9 @@ TOOLS = [
                 "name": "log_order",
                 "description": (
                     "Сохранить новый заказ клиента в Google-таблицу. Используй, когда "
-                    "пользователь описывает заказ клиента (кто заказал, что, размер, цвет)."
+                    "пользователь описывает заказ клиента (кто заказал, что, размер, цвет). "
+                    "В одном заказе может быть сразу несколько товаров — тогда перечисли "
+                    "их все в items, а не создавай несколько заказов."
                 ),
                 "parameters": {
                     "type": "object",
@@ -59,15 +93,43 @@ TOOLS = [
                             "type": "string",
                             "description": "Юзернейм клиента в Telegram (с @), если указан, иначе пустая строка.",
                         },
-                        "product": {"type": "string", "description": "Название товара."},
-                        "size": {"type": "string", "description": "Размер, если указан, иначе пустая строка."},
-                        "color": {"type": "string", "description": "Цвет, если указан, иначе пустая строка."},
                         "full_name": {
                             "type": "string",
                             "description": "ФИО клиента, если указано, иначе пустая строка.",
                         },
+                        "items": {
+                            "type": "array",
+                            "description": (
+                                "Товары заказа. Один элемент на каждый товар: «кроссовки Nike 42 "
+                                "чёрные и куртку Stone Island M» — это два элемента."
+                            ),
+                            "items": _ITEM_SCHEMA,
+                        },
                     },
-                    "required": ["product"],
+                    "required": ["items"],
+                },
+            },
+            {
+                "name": "add_items_to_order",
+                "description": (
+                    "Добавить товары в уже существующий заказ по его номеру. Используй, когда "
+                    "пользователь дозаказывает: «в заказ A1042 добавь ещё кепку», "
+                    "«к A1042 плюс футболка L белая за 2000»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_number": {
+                            "type": "string",
+                            "description": "Номер заказа, например 'A1042'.",
+                        },
+                        "items": {
+                            "type": "array",
+                            "description": "Товары, которые нужно добавить в этот заказ.",
+                            "items": _ITEM_SCHEMA,
+                        },
+                    },
+                    "required": ["order_number", "items"],
                 },
             },
             {
@@ -76,7 +138,7 @@ TOOLS = [
                     "Изменить статус существующего заказа по его номеру. Используй, когда "
                     "пользователь пишет что-то вроде 'статус A1042 = 3' или "
                     "'заказ B2087 передан в доставку' — во втором случае сопоставь "
-                    "формулировку с одним из 6 этапов и передай нужное число."
+                    f"формулировку с одним из {_STATUS_COUNT} этапов и передай нужное число."
                 ),
                 "parameters": {
                     "type": "object",
@@ -88,14 +150,84 @@ TOOLS = [
                         "new_status": {
                             "type": "integer",
                             "description": (
-                                "Новый статус, число от 1 до 6: "
-                                "1 - Товар выкуплен, 2 - Прибыл на склад в Китае, "
-                                "3 - Едет Китай → Москва, 4 - Прибыл в Москву, "
-                                "5 - Передан в доставку, 6 - Доставлен."
+                                f"Новый статус, число от 1 до {_STATUS_COUNT}: {_STATUS_LIST}."
                             ),
                         },
                     },
                     "required": ["order_number", "new_status"],
+                },
+            },
+            {
+                "name": "change_orders_status_bulk",
+                "description": (
+                    "Изменить статус сразу у пачки заказов. Используй, когда пользователь "
+                    "говорит про группу заказов: «все заказы со статусом 2 переведи в 3», "
+                    "«всё что на складе в Китае — отправил в Москву», "
+                    "«A1042, B2087 и C3011 переведи на 4»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "new_status": {
+                            "type": "integer",
+                            "description": (
+                                f"Новый статус, число от 1 до {_STATUS_COUNT}: {_STATUS_LIST}."
+                            ),
+                        },
+                        "from_status": {
+                            "type": "integer",
+                            "description": (
+                                f"Текущий статус заказов, которые нужно перевести (1-{_STATUS_COUNT}). "
+                                "Заполняй, когда пользователь говорит «все со статусом X». "
+                                "0, если он вместо этого перечислил номера заказов."
+                            ),
+                        },
+                        "order_numbers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Список номеров заказов, если пользователь перечислил их явно. "
+                                "Пустой список, если он указал текущий статус."
+                            ),
+                        },
+                    },
+                    "required": ["new_status"],
+                },
+            },
+            {
+                "name": "find_orders",
+                "description": (
+                    "Найти заказы и показать их состояние. Используй, когда пользователь "
+                    "спрашивает про заказы: «что там с A1042», «покажи заказы @ivanov», "
+                    "«какие заказы у Иванова», «найди заказ на кроссовки»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "Что искать: номер заказа, @юзернейм клиента, ФИО или название товара."
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+            {
+                "name": "show_stuck_orders",
+                "description": (
+                    "Показать заказы, которые давно висят на одном этапе. Используй на вопросы "
+                    "вида «что зависло», «какие заказы застряли», «что давно не двигалось»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Сколько дней заказ должен стоять без движения. По умолчанию 10.",
+                        },
+                    },
                 },
             },
         ]
@@ -105,11 +237,18 @@ TOOLS = [
 SYSTEM_PROMPT = """Ты — личный ассистент владельца бизнеса по перепродаже товаров из Китая.
 Твои задачи:
 1. Если пользователь просит напомнить о чём-то — вызови create_reminder.
-2. Если пользователь описывает новый заказ клиента — вызови log_order.
-3. Если пользователь просит изменить статус уже существующего заказа по номеру
+2. Если пользователь описывает новый заказ клиента — вызови log_order. В одном
+   заказе может быть несколько товаров: перечисли их все в items одним вызовом.
+3. Если он дозаказывает товары в существующий заказ по номеру — add_items_to_order.
+4. Если пользователь просит изменить статус уже существующего заказа по номеру
    (например «статус A1042 = 3» или «B2087 передан в доставку») — вызови
    change_order_status.
-4. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
+5. Если речь про группу заказов сразу («все со статусом 2 переведи в 3»,
+   «A1042 и B2087 на 4») — вызови change_orders_status_bulk.
+6. Если пользователь спрашивает про заказы («что с A1042», «заказы @ivanov») —
+   вызови find_orders.
+7. Если спрашивает, что зависло или застряло — вызови show_stuck_orders.
+8. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
    кратко и по делу, без лишней воды.
 
 Есть и третья возможность, которая обрабатывается отдельно от тебя (не через
@@ -127,6 +266,20 @@ tool calling): если пользователь присылает ссылку
 def _now_str() -> str:
     tz = ZoneInfo(config.TIMEZONE)
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S (%A)")
+
+
+def _to_python(value):
+    """
+    Аргументы функции приходят от Gemini в proto-обёртках. Для вложенных
+    структур (список товаров) их нужно развернуть в обычные dict и list.
+    """
+    if isinstance(value, (str, bytes, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "items"):
+        return {key: _to_python(item) for key, item in value.items()}
+    if hasattr(value, "__iter__"):
+        return [_to_python(item) for item in value]
+    return value
 
 
 def process_message(user_text: str, conversation_history: list = None) -> dict:
@@ -158,13 +311,21 @@ def process_message(user_text: str, conversation_history: list = None) -> dict:
     for part in parts:
         function_call = getattr(part, "function_call", None)
         if function_call and function_call.name:
-            args = dict(function_call.args)
+            args = _to_python(function_call.args)
             if function_call.name == "create_reminder":
                 return {"type": "reminder", **args}
             if function_call.name == "log_order":
                 return {"type": "order", **args}
+            if function_call.name == "add_items_to_order":
+                return {"type": "add_items", **args}
             if function_call.name == "change_order_status":
                 return {"type": "change_status", **args}
+            if function_call.name == "change_orders_status_bulk":
+                return {"type": "change_status_bulk", **args}
+            if function_call.name == "find_orders":
+                return {"type": "find_orders", **args}
+            if function_call.name == "show_stuck_orders":
+                return {"type": "stuck_orders", **args}
 
     text_parts = [part.text for part in parts if getattr(part, "text", "")]
     return {"type": "reply", "text": "\n".join(text_parts).strip() or "Не понял вопрос, уточни, пожалуйста."}

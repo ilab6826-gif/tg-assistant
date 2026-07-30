@@ -9,11 +9,11 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from bot import config, sheets_service
+from bot import clients_service, config, sheets_service
 
 logger = logging.getLogger(__name__)
 
-_jobstores = {"default": SQLAlchemyJobStore(url="sqlite:///reminders.sqlite")}
+_jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{config.data_path('reminders.sqlite')}")}
 scheduler = AsyncIOScheduler(jobstores=_jobstores, timezone=ZoneInfo(config.TIMEZONE))
 
 _bot = None  # инициализируется в main.py через init()
@@ -29,6 +29,14 @@ def init(bot_instance) -> None:
         hour=9,
         minute=0,
         id="weekly_digest",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _check_stuck_orders,
+        trigger="cron",
+        hour=10,
+        minute=0,
+        id="stuck_orders_check",
         replace_existing=True,
     )
     scheduler.start()
@@ -82,10 +90,15 @@ def cancel_reminder(chat_id: int, index: int) -> str:
     return target["text"]
 
 
+def _money(value: float) -> str:
+    return f"{value:,.0f}".replace(",", " ") + " ₽"
+
+
 async def _send_weekly_digest() -> None:
     """Раз в неделю присылает владельцу сводку заказов из Google Таблицы."""
-    if not config.OWNER_CHAT_ID:
-        logger.warning("OWNER_CHAT_ID не задан — пропускаю еженедельный дайджест.")
+    owner_chat_id = clients_service.get_owner_chat_id()
+    if not owner_chat_id:
+        logger.warning("Чат владельца неизвестен — пропускаю еженедельный дайджест.")
         return
 
     try:
@@ -95,8 +108,48 @@ async def _send_weekly_digest() -> None:
         return
 
     lines = [f"📊 Еженедельный дайджест\n\nЗаказов за последние 7 дней: {stats['total']}"]
+    if stats["revenue"] or stats["cost"]:
+        lines.append(
+            f"\n💰 Продажи: {_money(stats['revenue'])}"
+            f"\n💸 Закупка: {_money(stats['cost'])}"
+            f"\n📈 Прибыль: {_money(stats['profit'])}"
+        )
     if stats["top_products"]:
         lines.append("\nПопулярные товары:")
         for product, count in stats["top_products"]:
             lines.append(f"• {product} — {count}")
-    await _bot.send_message(int(config.OWNER_CHAT_ID), "\n".join(lines))
+    await _bot.send_message(owner_chat_id, "\n".join(lines))
+
+
+async def _check_stuck_orders() -> None:
+    """Раз в день проверяет, не застряли ли заказы на одном этапе."""
+    owner_chat_id = clients_service.get_owner_chat_id()
+    if not owner_chat_id:
+        return
+
+    try:
+        orders = sheets_service.stuck_orders(config.STUCK_ORDER_DAYS)
+    except Exception:
+        logger.exception("Не удалось проверить зависшие заказы")
+        return
+
+    if not orders:
+        return  # молчим, когда всё в порядке — лишние уведомления только мешают
+
+    lines = [f"⏳ Заказы без движения дольше {config.STUCK_ORDER_DAYS} дн.: {len(orders)}\n"]
+    for order in orders[:10]:
+        who = order["username"] or order["full_name"] or "клиент не указан"
+        status_index = order["status"] - 1
+        label = (
+            config.ORDER_STATUSES[status_index]
+            if 0 <= status_index < len(config.ORDER_STATUSES)
+            else "?"
+        )
+        lines.append(
+            f"📦 {order['order_number']} — {order['product'] or 'товар не указан'}\n"
+            f"   {who} · {label} · стоит {order['idle_days']} дн."
+        )
+    if len(orders) > 10:
+        lines.append(f"\n…и ещё {len(orders) - 10}. Все: /stuck")
+
+    await _bot.send_message(owner_chat_id, "\n".join(lines))
