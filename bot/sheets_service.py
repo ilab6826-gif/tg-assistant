@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-from bot import config
+from bot import config, photo_service
 
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -234,12 +234,16 @@ def _existing_order_numbers(worksheet) -> set:
 
 
 def generate_order_number() -> str:
-    """Генерирует короткий уникальный номер заказа вида 'A1042'."""
+    """
+    Генерирует короткий уникальный номер заказа вида 'A1042'.
+    Номера с фото в хранилище тоже пропускаем: если заказ удалили из таблицы,
+    а его фото остались, новый заказ с тем же номером показал бы чужие снимки.
+    """
     worksheet = _get_worksheet()
     existing = _existing_order_numbers(worksheet)
     for _ in range(100):
         candidate = f"{random.choice(string.ascii_uppercase)}{random.randint(1000, 9999)}"
-        if candidate not in existing:
+        if candidate not in existing and not photo_service.count(candidate):
             return candidate
     raise RuntimeError("Не удалось сгенерировать уникальный номер заказа")
 
