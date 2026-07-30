@@ -64,6 +64,7 @@ async def on_start(message: Message) -> None:
         "/reminders — список активных напоминаний\n"
         "/cancel <номер> — отменить напоминание из списка\n"
         "/orders_today — сколько заказов добавлено сегодня\n"
+        "/active — сколько сейчас активных заказов\n"
         "/stats — сводка и прибыль за 7 дней\n"
         "/month — сводка и прибыль за 30 дней\n"
         "/stuck — заказы, которые давно стоят на месте\n\n"
@@ -114,6 +115,36 @@ async def on_orders_today(message: Message) -> None:
         await message.answer("⚠️ Не получилось посчитать заказы, попробуй позже.")
         return
     await message.answer(f"📦 Сегодня добавлено заказов: {count}")
+
+
+def _format_active(stats: dict) -> str:
+    """Сводка по активным заказам для ответа владельцу."""
+    active = stats["active"]
+    if active == 0:
+        lines = ["📦 Активных заказов сейчас нет."]
+        if stats["delivered"]:
+            lines.append(f"Уже доставлено: {stats['delivered']}.")
+        return "\n".join(lines)
+
+    lines = [f"📦 Активных заказов сейчас: {active}"]
+    if stats["by_status"]:
+        lines.append("")
+        for item in stats["by_status"]:
+            lines.append(f"• {item['status']} — {item['label']}: {item['count']}")
+    if stats["delivered"]:
+        lines.append(f"\n✅ Доставлено всего: {stats['delivered']}")
+    return "\n".join(lines)
+
+
+@dp.message(Command("active"))
+async def on_active(message: Message) -> None:
+    try:
+        stats = sheets_service.active_orders_stats()
+    except Exception:
+        logger.exception("Ошибка при подсчёте активных заказов")
+        await message.answer("⚠️ Не получилось посчитать активные заказы, попробуй позже.")
+        return
+    await message.answer(_format_active(stats))
 
 
 def _money(value: float) -> str:
@@ -452,6 +483,15 @@ async def _handle_text(message: Message, text: str) -> None:
             reply_text = "⚠️ Не получилось проверить заказы, попробуй позже."
         else:
             reply_text = _format_stuck(orders)
+
+    elif result["type"] == "active_orders":
+        try:
+            stats = sheets_service.active_orders_stats()
+        except Exception:
+            logger.exception("Ошибка при подсчёте активных заказов")
+            reply_text = "⚠️ Не получилось посчитать активные заказы, попробуй позже."
+        else:
+            reply_text = _format_active(stats)
 
     else:
         reply_text = result["text"]

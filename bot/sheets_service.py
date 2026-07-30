@@ -494,6 +494,40 @@ def count_orders_today() -> int:
     return count
 
 
+def active_orders_stats() -> dict:
+    """
+    Сколько заказов сейчас в работе (ещё не доставлены) и расклад по этапам.
+    Доставленные считаются отдельно — чтобы было видно общую картину.
+    """
+    last_status = len(config.ORDER_STATUSES)
+    by_status = Counter()
+    active = 0
+    delivered = 0
+
+    for order in _all_orders():
+        status = order["status"]
+        if status >= last_status:
+            delivered += 1
+            continue
+        active += 1
+        by_status[status] += 1
+
+    breakdown = []
+    for status in range(1, last_status):
+        count = by_status.get(status, 0)
+        if not count:
+            continue
+        label = config.ORDER_STATUSES[status - 1]
+        breakdown.append({"status": status, "label": label, "count": count})
+
+    return {
+        "active": active,
+        "delivered": delivered,
+        "total": active + delivered,
+        "by_status": breakdown,
+    }
+
+
 def period_stats(days: int = 7) -> dict:
     """
     Сводка заказов за последние `days` дней:

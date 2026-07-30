@@ -230,6 +230,18 @@ TOOLS = [
                     },
                 },
             },
+            {
+                "name": "show_active_orders",
+                "description": (
+                    "Показать, сколько сейчас активных заказов (ещё не доставлены) и "
+                    "расклад по этапам. Используй на вопросы: «сколько активных заказов», "
+                    "«сколько заказов в работе», «сколько сейчас заказов», «активные заказы»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
         ]
     }
 ]
@@ -248,7 +260,8 @@ SYSTEM_PROMPT = """Ты — личный ассистент владельца �
 6. Если пользователь спрашивает про заказы («что с A1042», «заказы @ivanov») —
    вызови find_orders.
 7. Если спрашивает, что зависло или застряло — вызови show_stuck_orders.
-8. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
+8. Если спрашивает, сколько сейчас активных / в работе заказов — show_active_orders.
+9. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
    кратко и по делу, без лишней воды.
 
 Есть и третья возможность, которая обрабатывается отдельно от тебя (не через
@@ -326,6 +339,8 @@ def process_message(user_text: str, conversation_history: list = None) -> dict:
                 return {"type": "find_orders", **args}
             if function_call.name == "show_stuck_orders":
                 return {"type": "stuck_orders", **args}
+            if function_call.name == "show_active_orders":
+                return {"type": "active_orders"}
 
     text_parts = [part.text for part in parts if getattr(part, "text", "")]
     return {"type": "reply", "text": "\n".join(text_parts).strip() or "Не понял вопрос, уточни, пожалуйста."}
