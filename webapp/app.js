@@ -3,12 +3,15 @@
 
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const API_BASE = "/api";
+  const THEME_BG = "#0E1E39";
 
   if (tg) {
     tg.ready();
     tg.expand();
-    try { tg.setHeaderColor("#0a0910"); } catch (e) {}
-    try { tg.setBackgroundColor("#0a0910"); } catch (e) {}
+    try { tg.setHeaderColor(THEME_BG); } catch (e) {}
+    try { tg.setBackgroundColor(THEME_BG); } catch (e) {}
+    // Иначе на iOS свайп по галерее и списку случайно закрывает приложение.
+    try { tg.disableVerticalSwipes(); } catch (e) {}
   }
 
   function haptic(style) {
@@ -23,6 +26,12 @@
     }
   }
 
+  function selectionChanged() {
+    if (tg && tg.HapticFeedback) {
+      try { tg.HapticFeedback.selectionChanged(); } catch (e) {}
+    }
+  }
+
   function initData() {
     return tg && tg.initData ? tg.initData : "";
   }
@@ -33,12 +42,19 @@
 
   // ---------- DOM ----------
 
+  const topbar = document.getElementById("topbar");
+  const topbarTitle = document.getElementById("topbar-title");
   const heroGreeting = document.getElementById("hero-greeting");
   const refreshBtn = document.getElementById("refresh-btn");
+
   const loadingState = document.getElementById("loading-state");
   const ordersSection = document.getElementById("orders-section");
   const ordersList = document.getElementById("orders-list");
   const ordersCount = document.getElementById("orders-count");
+  const filters = document.getElementById("filters");
+  const segmentedThumb = document.getElementById("segmented-thumb");
+  const segments = Array.from(document.querySelectorAll(".segment"));
+  const filterEmpty = document.getElementById("filter-empty");
   const emptyState = document.getElementById("empty-state");
   const emptySub = document.getElementById("empty-sub");
   const usernameHint = document.getElementById("username-hint");
@@ -59,16 +75,26 @@
 
   const detailNumber = document.getElementById("detail-number");
   const detailMeta = document.getElementById("detail-meta");
+  const detailStatusPill = document.getElementById("detail-status-pill");
   const itemsList = document.getElementById("items-list");
   const itemsCount = document.getElementById("items-count");
-  const detailStatusPill = document.getElementById("detail-status-pill");
   const progressPercent = document.getElementById("progress-percent");
   const progressFill = document.getElementById("progress-fill");
+  const progressHint = document.getElementById("progress-hint");
   const stepperEl = document.getElementById("stepper");
   const toastEl = document.getElementById("toast");
 
   let cachedOrders = [];
+  let activeFilter = "all";
   let toastTimer = null;
+
+  // ---------- Верхняя панель ----------
+
+  function syncTopbar() {
+    topbar.classList.toggle("is-stuck", window.scrollY > 28);
+  }
+
+  window.addEventListener("scroll", syncTopbar, { passive: true });
 
   // ---------- Toast ----------
 
@@ -98,81 +124,38 @@
     return res.json();
   }
 
-  // ---------- Views ----------
+  // ---------- Навигация между экранами ----------
 
   function showListView() {
     viewDetail.classList.remove("is-active");
     viewList.classList.add("is-active");
     document.body.classList.remove("is-detail");
+    topbarTitle.textContent = "Мои заказы";
     if (tg && tg.BackButton) tg.BackButton.hide();
   }
 
-  function showDetailView() {
+  function showDetailView(order) {
     viewList.classList.remove("is-active");
     viewDetail.classList.add("is-active");
     document.body.classList.add("is-detail");
+    topbarTitle.textContent = order ? order.order_number : "Заказ";
     window.scrollTo({ top: 0, behavior: "instant" });
-    if (tg && tg.BackButton) {
-      tg.BackButton.show();
-      tg.BackButton.onClick(showListView);
-    }
+    syncTopbar();
+    if (tg && tg.BackButton) tg.BackButton.show();
   }
 
   backBtn.addEventListener("click", () => { haptic("light"); showListView(); });
+  if (tg && tg.BackButton) tg.BackButton.onClick(showListView);
 
-  // ---------- Rendering ----------
+  // ---------- Утилиты ----------
 
-  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const BOX_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const BOX_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function escapeHtml(str) {
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
-  }
-
-  function statusStateClass(status, total) {
-    if (status >= total) return "is-done";
-    if (status <= 1) return "";
-    return "is-active";
-  }
-
-  function formatDate(isoLike) {
-    if (!isoLike) return "";
-    const parts = isoLike.split(" ");
-    if (parts.length < 1) return isoLike;
-    const [datePart] = parts;
-    const [y, m, d] = datePart.split("-");
-    if (!y || !m || !d) return isoLike;
-    return `${d}.${m}.${y}`;
-  }
-
-  function renderStepper(order) {
-    const statuses = order.statuses || [];
-    const current = order.status;
-    stepperEl.innerHTML = "";
-
-    statuses.forEach((label, idx) => {
-      const stepNum = idx + 1;
-      const li = document.createElement("li");
-      li.className = "step";
-      li.style.animationDelay = `${idx * 70}ms`;
-
-      let state = "pending";
-      if (stepNum < current) state = "done";
-      else if (stepNum === current) state = "active";
-      li.classList.add(`is-${state}`);
-
-      li.innerHTML = `
-        <div class="step-line"><div class="step-line-fill"></div></div>
-        <div class="step-node"><span>${stepNum}</span>${CHECK_SVG}</div>
-        <div class="step-body">
-          <div class="step-title">${label}</div>
-          <div class="step-hint">Сейчас здесь</div>
-        </div>
-      `;
-      stepperEl.appendChild(li);
-    });
   }
 
   function plural(count, one, few, many) {
@@ -183,7 +166,27 @@
     return many;
   }
 
-  // ---------- Gallery ----------
+  function formatDate(isoLike) {
+    if (!isoLike) return "";
+    const [datePart] = isoLike.split(" ");
+    const [y, m, d] = datePart.split("-");
+    if (!y || !m || !d) return isoLike;
+    return `${d}.${m}.${y}`;
+  }
+
+  function totalSteps(order) {
+    return (order.statuses || []).length || 7;
+  }
+
+  function isDelivered(order) {
+    return order.status >= totalSteps(order);
+  }
+
+  function statusStateClass(order) {
+    return isDelivered(order) ? "is-done" : "is-active";
+  }
+
+  // ---------- Галерея ----------
 
   function updateGalleryIndicator() {
     const total = galleryTrack.children.length;
@@ -242,7 +245,7 @@
     updateGalleryIndicator();
   }
 
-  // ---------- Order details ----------
+  // ---------- Детали заказа ----------
 
   function renderItems(items) {
     const list = items || [];
@@ -264,7 +267,7 @@
 
       const li = document.createElement("li");
       li.className = "item-row";
-      li.style.animationDelay = `${idx * 55}ms`;
+      li.style.animationDelay = `${120 + idx * 55}ms`;
       li.innerHTML = `
         <span class="item-index">${idx + 1}</span>
         <span class="item-body">
@@ -276,8 +279,37 @@
     });
   }
 
+  function renderStepper(order) {
+    const statuses = order.statuses || [];
+    const current = order.status;
+    stepperEl.innerHTML = "";
+
+    statuses.forEach((label, idx) => {
+      const stepNum = idx + 1;
+      const li = document.createElement("li");
+      li.className = "step";
+      li.style.animationDelay = `${160 + idx * 60}ms`;
+
+      let state = "pending";
+      if (stepNum < current) state = "done";
+      else if (stepNum === current) state = "active";
+      li.classList.add(`is-${state}`);
+
+      li.innerHTML = `
+        <div class="step-line"><div class="step-line-fill"></div></div>
+        <div class="step-node"><span>${stepNum}</span>${CHECK_SVG}</div>
+        <div class="step-body">
+          <div class="step-title">${escapeHtml(label)}</div>
+          <div class="step-hint">Заказ здесь сейчас</div>
+        </div>
+      `;
+      stepperEl.appendChild(li);
+    });
+  }
+
   function renderDetail(order) {
-    const total = (order.statuses || []).length || 7;
+    const total = totalSteps(order);
+    const done = isDelivered(order);
     const progress = Math.min(100, Math.round((order.status / total) * 100));
     const items = order.items || [];
 
@@ -285,7 +317,7 @@
 
     detailNumber.textContent = order.order_number;
     detailStatusPill.textContent = order.status_label || "";
-    detailStatusPill.classList.toggle("is-done", order.status >= total);
+    detailStatusPill.classList.toggle("is-done", done);
 
     const metaParts = [];
     if (items.length) {
@@ -297,54 +329,111 @@
     renderItems(items);
 
     progressPercent.textContent = `${progress}%`;
-    progressFill.style.width = `${progress}%`;
+    progressHint.textContent = done
+      ? "Заказ доставлен — спасибо за покупку"
+      : `Этап ${order.status} из ${total}`;
+
+    // Ширина ставится в следующем кадре, иначе переход от 0% не проигрывается.
+    progressFill.style.width = "0%";
+    requestAnimationFrame(() => { progressFill.style.width = `${progress}%`; });
+
     renderStepper(order);
   }
 
   function openOrderDetail(order) {
     renderDetail(order);
-    showDetailView();
+    showDetailView(order);
     haptic("medium");
   }
 
-  function buildOrderItem(order) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "order-item";
+  // ---------- Строка списка ----------
 
-    const total = (order.statuses || []).length || 7;
-    const stateClass = statusStateClass(order.status, total);
-    const dotContent = order.status >= total ? CHECK_SVG : `<span>${order.status}</span>`;
+  function buildOrderItem(order) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "order-item";
+
+    const total = totalSteps(order);
+    const done = isDelivered(order);
+    const stateClass = statusStateClass(order);
     const photos = order.photos || [];
     const count = (order.items || []).length;
 
     const preview = photos.length
       ? `<img class="order-item-photo" src="${escapeHtml(photos[0])}" alt="" loading="lazy">`
       : `<span class="order-item-photo is-empty">${BOX_SVG}</span>`;
+    const badge = done ? `<span class="order-item-badge">${CHECK_SVG}</span>` : "";
     const countChip = count > 1
-      ? `<span class="order-item-chip">${count} ${count > 4 ? "товаров" : "товара"}</span>`
+      ? `<span class="order-item-chip">${count} ${plural(count, "товар", "товара", "товаров")}</span>`
       : "";
+    const dashes = Array.from({ length: total }, (_, i) => {
+      const on = i < order.status ? " is-on" : "";
+      return `<span class="${on.trim()}" style="animation-delay:${i * 45}ms"></span>`;
+    }).join("");
 
-    item.innerHTML = `
-      <div class="order-item-lead">
+    row.innerHTML = `
+      <span class="order-item-lead">
         ${preview}
-        <span class="order-item-badge ${stateClass}">${dotContent}</span>
-      </div>
-      <div class="order-item-body">
-        <div class="order-item-number">${escapeHtml(order.order_number)}${countChip}</div>
-        <div class="order-item-product">${escapeHtml(order.product || "Товар не указан")}</div>
-        <div class="order-item-status ${stateClass}">${escapeHtml(order.status_label || "")}</div>
-      </div>
+        ${badge}
+      </span>
+      <span class="order-item-body">
+        <span class="order-item-number">${escapeHtml(order.order_number)}${countChip}</span>
+        <span class="order-item-product">${escapeHtml(order.product || "Товар не указан")}</span>
+        <span class="order-item-status ${stateClass}">${escapeHtml(order.status_label || "")}</span>
+        <span class="order-item-steps ${done ? "is-done" : ""}">${dashes}</span>
+      </span>
       <svg class="order-item-chevron" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     `;
 
-    item.addEventListener("click", () => {
+    row.addEventListener("click", () => {
       haptic("light");
       openOrderDetail(order);
     });
 
-    return item;
+    return row;
   }
+
+  // ---------- Фильтры ----------
+
+  function matchesFilter(order) {
+    if (activeFilter === "active") return !isDelivered(order);
+    if (activeFilter === "done") return isDelivered(order);
+    return true;
+  }
+
+  function paintOrders() {
+    const visible = cachedOrders.filter(matchesFilter);
+
+    ordersList.innerHTML = "";
+    visible.forEach((order, idx) => {
+      const row = buildOrderItem(order);
+      row.style.animationDelay = `${idx * 55}ms`;
+      ordersList.appendChild(row);
+    });
+
+    ordersCount.textContent = visible.length ? String(visible.length) : "";
+    filterEmpty.classList.toggle("is-visible", visible.length === 0);
+    ordersList.hidden = visible.length === 0;
+  }
+
+  function applyFilter(name, index) {
+    activeFilter = name;
+    segments.forEach((btn, i) => btn.classList.toggle("is-active", i === index));
+    segmentedThumb.style.transform = `translateX(${index * 100}%)`;
+  }
+
+  function setFilter(name, index) {
+    if (activeFilter === name) return;
+    applyFilter(name, index);
+    selectionChanged();
+    paintOrders();
+  }
+
+  segments.forEach((btn, index) => {
+    btn.addEventListener("click", () => setFilter(btn.dataset.filter, index));
+  });
+
+  // ---------- Список ----------
 
   function setLoading(isLoading) {
     loadingState.classList.toggle("is-visible", isLoading);
@@ -354,33 +443,35 @@
   function renderOrdersList(orders, { needsUsername = false } = {}) {
     cachedOrders = orders;
     const hasOrders = orders.length > 0;
+    const showFilters = orders.length > 1;
 
     ordersSection.classList.toggle("is-visible", hasOrders);
     emptyState.classList.toggle("is-visible", !hasOrders && !needsUsername);
     usernameHint.classList.toggle("is-visible", needsUsername);
-    ordersCount.textContent = hasOrders ? String(orders.length) : "";
+    filters.classList.toggle("is-visible", showFilters);
 
-    ordersList.innerHTML = "";
-    orders.forEach((order, idx) => {
-      const el = buildOrderItem(order);
-      el.style.animationDelay = `${idx * 60}ms`;
-      ordersList.appendChild(el);
-    });
+    // Со скрытыми сегментами выбранная категория недоступна — возвращаем «Все».
+    if (!showFilters) applyFilter("all", 0);
 
     if (needsUsername) {
       emptySub.textContent = "Задай @username в настройках Telegram — тогда заказы будут подтягиваться автоматически.";
     } else if (!hasOrders) {
       emptySub.textContent = "Когда менеджер оформит заказ на твой @username, он появится здесь автоматически.";
     }
+
+    paintOrders();
   }
 
   async function loadOrders({ silent = false } = {}) {
     if (!silent) setLoading(true);
+    else refreshBtn.classList.add("is-spinning");
+
     try {
       const payload = await fetchMyOrders();
       const user = payload.user || {};
-      const name = user.first_name || (unsafeUser() && unsafeUser().first_name) || "друг";
-      heroGreeting.textContent = `Привет, ${name}!`;
+      const fallback = unsafeUser();
+      const name = user.first_name || (fallback && fallback.first_name) || "друг";
+      heroGreeting.textContent = `Привет, ${name}`;
       renderOrdersList(payload.orders || [], { needsUsername: !!payload.needs_username });
       if (silent) showToast("Заказы обновлены");
     } catch (e) {
@@ -397,7 +488,7 @@
     }
   }
 
-  // ---------- Search by number (fallback) ----------
+  // ---------- Поиск по номеру ----------
 
   function showSearchError(text) {
     searchError.textContent = text;
@@ -447,7 +538,8 @@
     loadOrders({ silent: true });
   });
 
-  // ---------- Init ----------
+  // ---------- Старт ----------
 
+  syncTopbar();
   loadOrders();
 })();

@@ -3,29 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0E1E39">
 <title>PR0JECT — Мои заказы</title>
-<link rel="stylesheet" href="style.css">
+<!-- ?v= обязателен: webview Telegram держит старую статику после деплоя. -->
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
-<div class="bg-glow"></div>
+<div class="backdrop" aria-hidden="true"></div>
+
+<header id="topbar" class="topbar">
+  <div class="topbar-inner">
+    <img class="brand-logo" src="logo.png?v=2" alt="PR0JECT">
+    <span id="topbar-title" class="topbar-title">Мои заказы</span>
+    <button id="refresh-btn" class="icon-btn" type="button" aria-label="Обновить">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3.5v6h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</header>
 
 <div class="app">
 
-  <header class="header">
-    <div class="brand">
-      <img class="brand-logo" src="logo.png" alt="PR0JECT">
-      <span class="brand-sub">Доставка из Китая</span>
-    </div>
-    <button id="refresh-btn" class="icon-btn" type="button" aria-label="Обновить">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-  </header>
-
   <section class="hero">
-    <p class="hero-greeting" id="hero-greeting">Привет!</p>
-    <p class="hero-sub">Здесь все твои заказы и этапы доставки в реальном времени</p>
+    <span class="hero-eyebrow">Доставка из Китая</span>
+    <h1 class="hero-title" id="hero-greeting">Привет!</h1>
+    <p class="hero-sub">Все заказы и этапы доставки — в реальном времени</p>
   </section>
 
   <main class="view-stack">
@@ -34,42 +37,59 @@
     <section id="view-list" class="view view-list is-active">
 
       <div id="loading-state" class="loading-state">
-        <div class="loading-spinner"></div>
-        <p>Загружаем заказы…</p>
+        <div class="skeleton-group">
+          <div class="skeleton-row"><div class="skeleton-thumb"></div><div class="skeleton-lines"><span class="skeleton-line w-40"></span><span class="skeleton-line w-70"></span><span class="skeleton-line w-25"></span></div></div>
+          <div class="skeleton-row"><div class="skeleton-thumb"></div><div class="skeleton-lines"><span class="skeleton-line w-30"></span><span class="skeleton-line w-60"></span><span class="skeleton-line w-25"></span></div></div>
+          <div class="skeleton-row"><div class="skeleton-thumb"></div><div class="skeleton-lines"><span class="skeleton-line w-35"></span><span class="skeleton-line w-50"></span><span class="skeleton-line w-25"></span></div></div>
+        </div>
       </div>
 
       <div id="orders-section" class="orders-section">
-        <div class="orders-heading">
-          <span>Мои заказы</span>
-          <span id="orders-count" class="orders-count"></span>
+
+        <div id="filters" class="segmented" role="tablist" aria-label="Фильтр заказов">
+          <span id="segmented-thumb" class="segmented-thumb" aria-hidden="true"></span>
+          <button class="segment is-active" type="button" role="tab" data-filter="all">Все</button>
+          <button class="segment" type="button" role="tab" data-filter="active">В пути</button>
+          <button class="segment" type="button" role="tab" data-filter="done">Доставлены</button>
         </div>
+
+        <div class="section-head">
+          <span class="section-title">Заказы</span>
+          <span id="orders-count" class="section-count"></span>
+        </div>
+
         <div id="orders-list" class="orders-list"></div>
+
+        <p id="filter-empty" class="filter-empty">В этой категории пока пусто</p>
       </div>
 
       <div id="empty-state" class="empty-state">
         <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <p class="empty-title">Пока нет заказов</p>
         <p class="empty-sub" id="empty-sub">Когда менеджер оформит заказ на твой @username, он появится здесь автоматически</p>
       </div>
 
       <div id="username-hint" class="hint-card">
-        <div class="hint-icon">@</div>
-        <div class="hint-body">
-          <p class="hint-title">Нужен @username в Telegram</p>
-          <p class="hint-text">Чтобы видеть свои заказы, задай username в настройках Telegram. Менеджер указывает его при оформлении.</p>
-        </div>
+        <span class="hint-icon">@</span>
+        <span class="hint-body">
+          <span class="hint-title">Нужен @username в Telegram</span>
+          <span class="hint-text">Чтобы видеть свои заказы, задай username в настройках Telegram. Менеджер указывает его при оформлении.</span>
+        </span>
       </div>
 
       <details class="lookup-panel">
-        <summary>Найти заказ по номеру</summary>
+        <summary>
+          <span class="lookup-summary-text">Найти заказ по номеру</span>
+          <svg class="lookup-chevron" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </summary>
         <form id="search-form" class="search-form" autocomplete="off">
           <div class="search-field">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <input id="order-input" type="text" inputmode="text" placeholder="Например A1042" maxlength="16" autocapitalize="characters">
           </div>
-          <button id="search-btn" type="submit" class="btn-secondary">
+          <button id="search-btn" type="submit" class="btn-primary">
             <span class="btn-label">Проверить</span>
             <span class="btn-spinner" aria-hidden="true"></span>
           </button>
@@ -95,29 +115,38 @@
         </div>
       </section>
 
-      <div class="order-card">
-        <div class="order-card-row">
+      <div class="detail-head">
+        <span class="detail-label">Заказ</span>
+        <div class="detail-head-row">
           <span class="order-number" id="detail-number">—</span>
           <span class="order-status-pill" id="detail-status-pill">—</span>
         </div>
         <p class="order-meta" id="detail-meta"></p>
+      </div>
 
-        <div class="items-heading">
-          <span>Состав заказа</span>
-          <span id="items-count" class="items-count"></span>
+      <div class="card progress-card">
+        <div class="progress-top">
+          <span class="card-label">Прогресс доставки</span>
+          <span id="progress-percent" class="progress-value">0%</span>
+        </div>
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        <p id="progress-hint" class="progress-hint"></p>
+      </div>
+
+      <div class="card items-card">
+        <div class="card-head">
+          <span class="card-label">Состав заказа</span>
+          <span id="items-count" class="section-count"></span>
         </div>
         <ul id="items-list" class="items-list"></ul>
       </div>
 
-      <div class="progress-wrap">
-        <div class="progress-label">
-          <span>Прогресс доставки</span>
-          <span id="progress-percent">0%</span>
+      <div class="card timeline-card">
+        <div class="card-head">
+          <span class="card-label">Этапы доставки</span>
         </div>
-        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        <ol id="stepper" class="stepper"></ol>
       </div>
-
-      <ol id="stepper" class="stepper"></ol>
 
     </section>
 
@@ -127,6 +156,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
