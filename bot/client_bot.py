@@ -5,6 +5,7 @@
 Этот бот — для клиентов: открывают Mini App, видят все свои заказы и получают
 пуш-уведомления, когда владелец меняет статус через ассистента.
 """
+import html
 import logging
 from typing import Optional
 
@@ -136,7 +137,7 @@ async def send_to_client(chat_id: int, text: str) -> bool:
 
 def _status_line(status: int, label: str) -> str:
     emoji = _STATUS_EMOJI[status - 1] if 1 <= status <= len(_STATUS_EMOJI) else "📦"
-    return f"{emoji} {label}"
+    return f"{emoji} <b>{label}</b>"
 
 
 async def notify_status_change(username: str, order_number: str, product: str, new_status: int) -> bool:
@@ -155,20 +156,22 @@ async def notify_status_change(username: str, order_number: str, product: str, n
     label = config.ORDER_STATUSES[new_status - 1] if 1 <= new_status <= total else ""
 
     lines = [
-        f"📦 Заказ {order_number} — обновление статуса",
+        f"Заказ <b>{html.escape(order_number)}</b> · обновление",
         "",
-        _status_line(new_status, label),
+        _status_line(new_status, html.escape(label)),
+        f"Этап {new_status} из {total}",
     ]
     if product:
-        lines.append(f"\nТовар: {product}")
-    lines.append(f"Этап {new_status} из {total}")
+        lines.append(f"\n{html.escape(product)}")
     if new_status >= total:
-        lines.append("\n🎉 Заказ доставлен. Спасибо, что выбрал нас!")
+        lines.append("\nЗаказ доставлен. Спасибо, что выбрал нас!")
 
     try:
+        # HTML, поэтому номер и название товара из таблицы экранируем.
         await client_bot.send_message(
             chat_id,
             "\n".join(lines),
+            parse_mode="HTML",
             reply_markup=_mini_app_inline_keyboard(),
         )
     except Exception:
