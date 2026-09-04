@@ -44,6 +44,16 @@ _CARRIERS = (
         ("5post", "fivepost", "пятьпост", "5 пост"),
         "https://fivepost.ru/?tracking={number}",
     ),
+    (
+        "magictrans",
+        "Magic Trans",
+        (
+            "magic trans", "magic-trans", "magictrans", "magic",
+            "мейджик транс", "мейджик-транс", "мейджик",
+            "меджик транс", "меджик", "мэджик транс", "мэджик",
+        ),
+        "https://magic-trans.ru/otsledit-gruz/?act-no={number}",
+    ),
 )
 
 

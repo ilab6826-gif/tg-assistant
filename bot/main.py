@@ -7,7 +7,7 @@ from typing import Optional
 import uvicorn
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import BotCommand, KeyboardButton, Message, ReplyKeyboardMarkup
 
 from bot import (
     api,
@@ -33,6 +33,65 @@ dp = Dispatcher()
 # Последний созданный заказ в каждом чате — чтобы фото без номера цеплялось к нему.
 _last_order_number = {}
 
+# Подписи кнопок. Telegram присылает их как обычный текст, не как /команду.
+BTN_ACTIVE = "📦 Активные"
+BTN_STUCK = "⏳ Зависшие"
+BTN_TODAY = "📅 Сегодня"
+BTN_WEEK = "📊 Неделя"
+BTN_MONTH = "📈 Месяц"
+BTN_REMINDERS = "📋 Напоминания"
+BTN_REVIEWS = "⭐ Отзывы"
+BTN_REFS = "🎁 Рефералка"
+BTN_HELP = "❓ Справка"
+
+
+def _owner_keyboard() -> ReplyKeyboardMarkup:
+    """Постоянная клавиатура внизу чата: сводки одним тапом, поле ввода свободно."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_ACTIVE), KeyboardButton(text=BTN_STUCK)],
+            [KeyboardButton(text=BTN_TODAY), KeyboardButton(text=BTN_WEEK)],
+            [KeyboardButton(text=BTN_MONTH), KeyboardButton(text=BTN_REMINDERS)],
+            [KeyboardButton(text=BTN_REVIEWS), KeyboardButton(text=BTN_REFS)],
+            [KeyboardButton(text=BTN_HELP)],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Заказ, статус или трек…",
+    )
+
+
+async def _reply(message: Message, text: str) -> None:
+    await message.answer(text, reply_markup=_owner_keyboard())
+
+
+def _help_text(chat_id: int) -> str:
+    return (
+        "Я твой личный ассистент. Снизу кнопки — сводки одним тапом. "
+        "Заказы, статусы и треки пиши обычным текстом.\n\n"
+        "📌 Напоминание — «напомни завтра в 12:00 обработать заказ»\n\n"
+        "📦 Новый заказ — опиши свободным текстом, можно сразу несколько товаров:\n"
+        "«@ivanov заказал кроссовки Nike 42 чёрные за 7500 и куртку\n"
+        "Stone Island M синюю за 12000, Иванов Иван, закупка 9000»\n\n"
+        "➕ Дозаказ — «в заказ A1042 добавь ещё кепку New Era за 3000»\n\n"
+        "🔄 Статус — «статус A1042 = 3»\n"
+        "   1 — выкуплен · 2 — склад в Китае · 3 — Китай → Москва\n"
+        "   4 — таможня · 5 — прибыл в Москву · 6 — передан в доставку\n"
+        "   7 — доставлен\n\n"
+        "🚚 Трек — «трек A1042 СДЭК 1234567890» или «трек A1042 Magic Trans 008654745».\n"
+        "   Если заказ ещё не на этапе 6, статус поднимется сам.\n\n"
+        "📚 Пачка статусов — «все заказы со статусом 2 переведи в 3»\n\n"
+        "🔍 Поиск — «что с A1042», «покажи заказы @ivanov»\n\n"
+        "📷 Фото — пришли снимок или альбом с номером заказа в подписи\n\n"
+        "💬 Ответ клиенту — реплаем на его сообщение\n\n"
+        "🔍 Разбор канала — пришли t.me/канал или @канал отдельным сообщением\n\n"
+        "🎙 Голосовые тоже понимаю\n\n"
+        "Отмена напоминания: /cancel <номер> из списка.\n\n"
+        f"chat_id: {chat_id} — если нужно, сохрани в OWNER_CHAT_ID.\n\n"
+        "⚠️ В заказе всегда указывай @username клиента."
+    )
+
+
 def _remember_owner(message: Message) -> None:
     if clients_service.remember_owner_chat_id(message.chat.id):
         logger.info("Запомнил чат владельца: %s", message.chat.id)
@@ -43,49 +102,10 @@ def _remember_owner(message: Message) -> None:
 @dp.message(CommandStart())
 async def on_start(message: Message) -> None:
     _remember_owner(message)
-    await message.answer(
-        "Привет! Я твой личный ассистент. Умею:\n\n"
-        "📌 Напоминать о задачах — просто напиши, например:\n"
-        "«напомни завтра в 12:00 обработать заказ»\n\n"
-        "📦 Записывать заказы в таблицу — опиши заказ свободным текстом,\n"
-        "в одном заказе может быть сразу много товаров:\n"
-        "«@ivanov заказал кроссовки Nike 42 чёрные за 7500 и куртку\n"
-        "Stone Island M синюю за 12000, Иванов Иван, закупка 9000»\n\n"
-        "➕ Дозаказ — «в заказ A1042 добавь ещё кепку New Era за 3000»\n\n"
-        "🔄 Менять статус заказа — «статус A1042 = 3»\n"
-        "   1 — выкуплен · 2 — склад в Китае · 3 — Китай → Москва\n"
-        "   4 — таможня · 5 — прибыл в Москву · 6 — передан в доставку\n"
-        "   7 — доставлен\n\n"
-        "🚚 Трек последней мили — «трек A1042 СДЭК 1234567890».\n"
-        "   Клиент увидит номер в приложении и сможет открыть отслеживание.\n"
-        "   Если заказ ещё не на этапе 6, статус поднимется сам.\n\n"
-        "📚 Менять статус сразу у пачки — «все заказы со статусом 2 переведи в 3»\n\n"
-        "🔍 Искать заказы — «что с A1042», «покажи заказы @ivanov»\n\n"
-        "📷 Фото товаров — пришли одно или сразу альбом с номером заказа\n"
-        "в подписи, клиент пролистает их в приложении\n\n"
-        "💬 Отвечать клиентам — их сообщения приходят сюда,\n"
-        "ответь реплаем, и я передам\n\n"
-        "🎁 Рефералка — клиент зовёт друга своей ссылкой,\n"
-        "оба получают бонус, когда друг оформляет первый заказ\n\n"
-        "⭐ Отзывы — после доставки бот просит оценку, фото и комментарий\n\n"
-        "🔍 Разбирать конкурентов/рекламные каналы — пришли ссылку на канал\n"
-        "отдельным сообщением (t.me/somechannel или @somechannel)\n\n"
-        "🎙 Понимаю и голосовые сообщения — просто наговори то же самое голосом\n\n"
-        "Команды:\n"
-        "/reminders — список активных напоминаний\n"
-        "/cancel <номер> — отменить напоминание из списка\n"
-        "/orders_today — сколько заказов добавлено сегодня\n"
-        "/active — сколько сейчас активных заказов\n"
-        "/stats — сводка и прибыль за 7 дней\n"
-        "/month — сводка и прибыль за 30 дней\n"
-        "/stuck — заказы, которые давно стоят на месте\n"
-        "/reviews — последние отзывы клиентов\n"
-        "/refs — кто кого привёл и сколько бонусов висит\n\n"
-        f"Твой chat_id: {message.chat.id} — сохрани его в переменную OWNER_CHAT_ID, "
-        "если хочешь получать напоминания и уведомления именно сюда.\n\n"
-        "⚠️ В заказе всегда указывай @username клиента — иначе он не увидит заказ "
-        "у себя и не получит уведомление о смене статуса.",
-        reply_markup=ReplyKeyboardRemove(),
+    await _reply(
+        message,
+        "На месте. Кнопки внизу — сводки и списки.\n"
+        "Заказ, статус или трек пиши как обычно, справка — нижней кнопкой.",
     )
 
 
@@ -93,30 +113,33 @@ async def on_start(message: Message) -> None:
 async def on_reminders(message: Message) -> None:
     reminders = scheduler.list_reminders(message.chat.id)
     if not reminders:
-        await message.answer("У тебя нет активных напоминаний.")
+        await _reply(message, "У тебя нет активных напоминаний.")
         return
 
     lines = ["📋 Активные напоминания:\n"]
     for i, r in enumerate(reminders, start=1):
         lines.append(f"{i}. {r['text']} — {r['run_time'].strftime('%d.%m.%Y в %H:%M')}")
     lines.append("\nЧтобы отменить: /cancel <номер>")
-    await message.answer("\n".join(lines))
+    await _reply(message, "\n".join(lines))
 
 
 @dp.message(Command("cancel"))
 async def on_cancel(message: Message, command: CommandObject) -> None:
     if not command.args or not command.args.strip().isdigit():
-        await message.answer("Укажи номер напоминания для отмены, например: /cancel 2\n"
-                              "Посмотреть номера: /reminders")
+        await _reply(
+            message,
+            "Укажи номер напоминания для отмены, например: /cancel 2\n"
+            "Посмотреть номера: кнопка «Напоминания» или /reminders",
+        )
         return
 
     index = int(command.args.strip())
     try:
         text = scheduler.cancel_reminder(message.chat.id, index)
     except IndexError:
-        await message.answer("Нет напоминания с таким номером. Посмотри список: /reminders")
+        await _reply(message, "Нет напоминания с таким номером. Посмотри список: кнопка «Напоминания».")
         return
-    await message.answer(f"❌ Напоминание «{text}» отменено.")
+    await _reply(message, f"❌ Напоминание «{text}» отменено.")
 
 
 @dp.message(Command("orders_today"))
@@ -125,9 +148,9 @@ async def on_orders_today(message: Message) -> None:
         count = sheets_service.count_orders_today()
     except Exception:
         logger.exception("Ошибка при подсчёте заказов за сегодня")
-        await message.answer("⚠️ Не получилось посчитать заказы, попробуй позже.")
+        await _reply(message, "⚠️ Не получилось посчитать заказы, попробуй позже.")
         return
-    await message.answer(f"📦 Сегодня добавлено заказов: {count}")
+    await _reply(message, f"📦 Сегодня добавлено заказов: {count}")
 
 
 def _format_active(stats: dict) -> str:
@@ -155,9 +178,9 @@ async def on_active(message: Message) -> None:
         stats = sheets_service.active_orders_stats()
     except Exception:
         logger.exception("Ошибка при подсчёте активных заказов")
-        await message.answer("⚠️ Не получилось посчитать активные заказы, попробуй позже.")
+        await _reply(message, "⚠️ Не получилось посчитать активные заказы, попробуй позже.")
         return
-    await message.answer(_format_active(stats))
+    await _reply(message, _format_active(stats))
 
 
 def _money(value: float) -> str:
@@ -193,9 +216,9 @@ async def on_stats(message: Message) -> None:
         stats = sheets_service.period_stats(7)
     except Exception:
         logger.exception("Ошибка при подсчёте статистики за неделю")
-        await message.answer("⚠️ Не получилось посчитать статистику, попробуй позже.")
+        await _reply(message, "⚠️ Не получилось посчитать статистику, попробуй позже.")
         return
-    await message.answer(_format_stats(stats, 7))
+    await _reply(message, _format_stats(stats, 7))
 
 
 @dp.message(Command("month"))
@@ -204,9 +227,9 @@ async def on_month(message: Message) -> None:
         stats = sheets_service.period_stats(30)
     except Exception:
         logger.exception("Ошибка при подсчёте статистики за месяц")
-        await message.answer("⚠️ Не получилось посчитать статистику, попробуй позже.")
+        await _reply(message, "⚠️ Не получилось посчитать статистику, попробуй позже.")
         return
-    await message.answer(_format_stats(stats, 30))
+    await _reply(message, _format_stats(stats, 30))
 
 
 @dp.message(Command("stuck"))
@@ -215,9 +238,9 @@ async def on_stuck(message: Message) -> None:
         orders = sheets_service.stuck_orders(config.STUCK_ORDER_DAYS)
     except Exception:
         logger.exception("Ошибка при поиске зависших заказов")
-        await message.answer("⚠️ Не получилось проверить заказы, попробуй позже.")
+        await _reply(message, "⚠️ Не получилось проверить заказы, попробуй позже.")
         return
-    await message.answer(_format_stuck(orders))
+    await _reply(message, _format_stuck(orders))
 
 
 @dp.message(Command("reviews"))
@@ -225,7 +248,7 @@ async def on_reviews(message: Message) -> None:
     summary = reviews_service.stats()
     items = reviews_service.recent()
     if not summary["rated"]:
-        await message.answer("⭐ Отзывов пока нет — бот попросит их после первой доставки.")
+        await _reply(message, "⭐ Отзывов пока нет — бот попросит их после первой доставки.")
         return
 
     lines = [
@@ -239,7 +262,7 @@ async def on_reviews(message: Message) -> None:
         lines.append(f"• {item['order_number']} · {who} · {stars}{extra}")
         if item.get("comment"):
             lines.append(f"  {item['comment'][:180]}")
-    await message.answer("\n".join(lines))
+    await _reply(message, "\n".join(lines))
 
 
 @dp.message(Command("refs"))
@@ -247,9 +270,10 @@ async def on_refs(message: Message) -> None:
     totals = referrals_service.totals()
     top = referrals_service.top_referrers()
     if not totals["invited"]:
-        await message.answer(
+        await _reply(
+            message,
             "🎁 Пока никто не пришёл по приглашению.\n"
-            "Клиенты зовут друзей командой /invite или кнопкой в приложении."
+            "Клиенты зовут друзей командой /invite или кнопкой в приложении.",
         )
         return
 
@@ -267,7 +291,31 @@ async def on_refs(message: Message) -> None:
         f"пригласившему {_money(config.REFERRAL_BONUS)} на следующий. "
         "Списываешь руками, бот только напоминает."
     )
-    await message.answer("\n".join(lines))
+    await _reply(message, "\n".join(lines))
+
+
+async def on_help(message: Message) -> None:
+    await _reply(message, _help_text(message.chat.id))
+
+
+_OWNER_BUTTONS = {
+    BTN_ACTIVE: on_active,
+    BTN_STUCK: on_stuck,
+    BTN_TODAY: on_orders_today,
+    BTN_WEEK: on_stats,
+    BTN_MONTH: on_month,
+    BTN_REMINDERS: on_reminders,
+    BTN_REVIEWS: on_reviews,
+    BTN_REFS: on_refs,
+    BTN_HELP: on_help,
+}
+
+
+@dp.message(F.text.in_(set(_OWNER_BUTTONS)))
+async def on_menu_button(message: Message) -> None:
+    """Кнопки клавиатуры — те же сводки, что и slash-команды."""
+    _remember_owner(message)
+    await _OWNER_BUTTONS[message.text](message)
 
 
 _ONLY_CHANNEL_RE = re.compile(
@@ -671,7 +719,7 @@ async def _handle_text(message: Message, text: str) -> None:
     else:
         reply_text = result["text"]
 
-    await message.answer(reply_text)
+    await _reply(message, reply_text)
     memory_service.add_message(message.chat.id, "user", text)
     memory_service.add_message(message.chat.id, "model", reply_text)
 
@@ -854,9 +902,25 @@ def _run_api_server() -> None:
     uvicorn.run(api.app, host="0.0.0.0", port=port, log_level="warning")
 
 
+async def _setup_owner_commands() -> None:
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Клавиатура и короткий экран"),
+        BotCommand(command="active", description="Активные заказы"),
+        BotCommand(command="stuck", description="Зависшие заказы"),
+        BotCommand(command="orders_today", description="Заказы за сегодня"),
+        BotCommand(command="stats", description="Сводка за неделю"),
+        BotCommand(command="month", description="Сводка за месяц"),
+        BotCommand(command="reminders", description="Активные напоминания"),
+        BotCommand(command="cancel", description="Отменить напоминание: /cancel 2"),
+        BotCommand(command="reviews", description="Последние отзывы"),
+        BotCommand(command="refs", description="Рефералка"),
+    ])
+
+
 async def main() -> None:
     scheduler.init(bot)
     client_bot.notify_owner = notify_owner_message
+    await _setup_owner_commands()
     threading.Thread(target=_run_api_server, daemon=True).start()
 
     tasks = [dp.start_polling(bot)]
