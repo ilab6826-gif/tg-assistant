@@ -104,3 +104,13 @@ ORDER_STATUSES = [
     "Передан в доставку",
     "Доставлен",
 ]
+
+# Этап, с которого клиенту нужен трек последней мили (СДЭК / Яндекс / Почта).
+# Ищем по формулировке, чтобы не привязываться к номеру, если список этапов сдвинется.
+LAST_MILE_STATUS = next(
+    (
+        i for i, label in enumerate(ORDER_STATUSES, 1)
+        if "доставк" in label.lower() and "доставлен" not in label.lower()
+    ),
+    max(1, len(ORDER_STATUSES) - 1),
+)

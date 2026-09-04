@@ -83,6 +83,10 @@
   const progressHint = document.getElementById("progress-hint");
   const stepperEl = document.getElementById("stepper");
   const toastEl = document.getElementById("toast");
+  const trackingCard = document.getElementById("tracking-card");
+  const trackingCarrier = document.getElementById("tracking-carrier");
+  const trackingNumberBtn = document.getElementById("tracking-number");
+  const trackingLinkBtn = document.getElementById("tracking-link");
 
   const inviteCard = document.getElementById("invite-card");
   const inviteSub = document.getElementById("invite-sub");
@@ -299,6 +303,44 @@
     });
   }
 
+  function renderTracking(order) {
+    const number = (order && order.tracking) || "";
+    trackingCard.hidden = !number;
+    trackingLinkBtn.hidden = true;
+    trackingLinkBtn.onclick = null;
+    if (!number) return;
+
+    trackingCarrier.textContent = order.carrier || "";
+    trackingNumberBtn.textContent = number;
+    trackingNumberBtn.onclick = async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(number);
+        } else {
+          throw new Error("clipboard");
+        }
+        showToast("Трек скопирован");
+        haptic("light");
+      } catch (err) {
+        showToast(number);
+      }
+    };
+
+    const url = order.tracking_url || "";
+    if (!url) return;
+    trackingLinkBtn.hidden = false;
+    trackingLinkBtn.onclick = () => {
+      haptic("medium");
+      if (tg && typeof tg.openLink === "function") {
+        try {
+          tg.openLink(url);
+          return;
+        } catch (err) {}
+      }
+      window.open(url, "_blank", "noopener");
+    };
+  }
+
   function renderStepper(order) {
     const statuses = order.statuses || [];
     const current = order.status;
@@ -347,11 +389,14 @@
     detailMeta.textContent = metaParts.join(" · ");
 
     renderItems(items);
+    renderTracking(order);
 
     progressPercent.textContent = `${progress}%`;
     progressHint.textContent = done
       ? "Заказ доставлен — спасибо за покупку"
-      : `Этап ${order.status} из ${total}`;
+      : order.tracking
+        ? `Этап ${order.status} из ${total} · трек ниже`
+        : `Этап ${order.status} из ${total}`;
 
     // Ширина ставится в следующем кадре, иначе переход от 0% не проигрывается.
     progressFill.style.width = "0%";
@@ -386,6 +431,9 @@
     const countChip = count > 1
       ? `<span class="order-item-chip">${count} ${plural(count, "товар", "товара", "товаров")}</span>`
       : "";
+    const trackChip = order.tracking
+      ? `<span class="order-item-chip">Трек</span>`
+      : "";
     const dashes = Array.from({ length: total }, (_, i) => {
       const on = i < order.status ? " is-on" : "";
       return `<span class="${on.trim()}" style="animation-delay:${i * 45}ms"></span>`;
@@ -397,7 +445,7 @@
         ${badge}
       </span>
       <span class="order-item-body">
-        <span class="order-item-number">${escapeHtml(order.order_number)}${countChip}</span>
+        <span class="order-item-number">${escapeHtml(order.order_number)}${countChip}${trackChip}</span>
         <span class="order-item-product">${escapeHtml(order.product || "Товар не указан")}</span>
         <span class="order-item-status ${stateClass}">${escapeHtml(order.status_label || "")}</span>
         <span class="order-item-steps ${done ? "is-done" : ""}">${dashes}</span>

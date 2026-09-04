@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0E1E39">
 <title>PR0JECT — Мои заказы</title>
 <!-- ?v= обязателен: webview Telegram держит старую статику после деплоя. -->
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -166,6 +166,18 @@
         <p id="progress-hint" class="progress-hint"></p>
       </div>
 
+      <section id="tracking-card" class="card tracking-card" hidden>
+        <div class="card-head">
+          <span class="card-label">Трек-номер</span>
+          <span id="tracking-carrier" class="section-count"></span>
+        </div>
+        <button id="tracking-number" class="tracking-number" type="button">—</button>
+        <button id="tracking-link" class="btn-primary tracking-link" type="button" hidden>
+          <span class="btn-label">Отследить посылку</span>
+        </button>
+        <p class="tracking-hint">Нажми номер, чтобы скопировать</p>
+      </section>
+
       <div class="card items-card">
         <div class="card-head">
           <span class="card-label">Состав заказа</span>
@@ -189,6 +201,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

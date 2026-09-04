@@ -153,8 +153,54 @@ TOOLS = [
                                 f"Новый статус, число от 1 до {_STATUS_COUNT}: {_STATUS_LIST}."
                             ),
                         },
+                        "tracking_number": {
+                            "type": "string",
+                            "description": (
+                                "Трек-номер последней мили, если пользователь назвал его "
+                                "вместе со сменой статуса. Например «1234567890». "
+                                "Пустая строка, если трека нет."
+                            ),
+                        },
+                        "carrier": {
+                            "type": "string",
+                            "description": (
+                                "Служба доставки, если названа: СДЭК, Яндекс, Почта России, "
+                                "DPD, Boxberry. Пустая строка, если не названа."
+                            ),
+                        },
                     },
                     "required": ["order_number", "new_status"],
+                },
+            },
+            {
+                "name": "set_order_tracking",
+                "description": (
+                    "Записать трек-номер последней мили (СДЭК, Яндекс, Почта России и т.д.) "
+                    "для существующего заказа. Используй, когда пользователь пишет "
+                    "«трек A1042 СДЭК 1234567890», «A1042 отправил СДЭКом 123», "
+                    "«трек-номер B2087 123456». Если заказ ещё не на этапе "
+                    "«передан в доставку», статус поднимется до него автоматически."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_number": {
+                            "type": "string",
+                            "description": "Номер заказа, например 'A1042'.",
+                        },
+                        "tracking_number": {
+                            "type": "string",
+                            "description": "Сам номер отслеживания, без названия службы.",
+                        },
+                        "carrier": {
+                            "type": "string",
+                            "description": (
+                                "Служба доставки: СДЭК, Яндекс, Почта России, DPD, Boxberry. "
+                                "Пустая строка, если пользователь её не назвал."
+                            ),
+                        },
+                    },
+                    "required": ["order_number", "tracking_number"],
                 },
             },
             {
@@ -254,14 +300,17 @@ SYSTEM_PROMPT = """Ты — личный ассистент владельца �
 3. Если он дозаказывает товары в существующий заказ по номеру — add_items_to_order.
 4. Если пользователь просит изменить статус уже существующего заказа по номеру
    (например «статус A1042 = 3» или «B2087 передан в доставку») — вызови
-   change_order_status.
+   change_order_status. Если в том же сообщении назван трек последней мили
+   («в доставку, трек СДЭК 123…») — передай tracking_number и carrier туда же.
 5. Если речь про группу заказов сразу («все со статусом 2 переведи в 3»,
    «A1042 и B2087 на 4») — вызови change_orders_status_bulk.
 6. Если пользователь спрашивает про заказы («что с A1042», «заказы @ivanov») —
    вызови find_orders.
 7. Если спрашивает, что зависло или застряло — вызови show_stuck_orders.
 8. Если спрашивает, сколько сейчас активных / в работе заказов — show_active_orders.
-9. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
+9. Если даёт трек последней мили без смены статуса («трек A1042 СДЭК 123…»,
+   «A1042 отправил СДЭКом») — вызови set_order_tracking.
+10. Во всех остальных случаях — просто ответь как полезный, дружелюбный ассистент,
    кратко и по делу, без лишней воды.
 
 Есть и третья возможность, которая обрабатывается отдельно от тебя (не через
@@ -321,26 +370,45 @@ def process_message(user_text: str, conversation_history: list = None) -> dict:
     response = model.generate_content(contents)
 
     parts = response.candidates[0].content.parts
+    status_args = None
+    tracking_args = None
+    other = None
     for part in parts:
         function_call = getattr(part, "function_call", None)
-        if function_call and function_call.name:
-            args = _to_python(function_call.args)
+        if not (function_call and function_call.name):
+            continue
+        args = _to_python(function_call.args)
+        if function_call.name == "change_order_status":
+            status_args = args
+        elif function_call.name == "set_order_tracking":
+            tracking_args = args
+        elif other is None:
             if function_call.name == "create_reminder":
-                return {"type": "reminder", **args}
-            if function_call.name == "log_order":
-                return {"type": "order", **args}
-            if function_call.name == "add_items_to_order":
-                return {"type": "add_items", **args}
-            if function_call.name == "change_order_status":
-                return {"type": "change_status", **args}
-            if function_call.name == "change_orders_status_bulk":
-                return {"type": "change_status_bulk", **args}
-            if function_call.name == "find_orders":
-                return {"type": "find_orders", **args}
-            if function_call.name == "show_stuck_orders":
-                return {"type": "stuck_orders", **args}
-            if function_call.name == "show_active_orders":
-                return {"type": "active_orders"}
+                other = {"type": "reminder", **args}
+            elif function_call.name == "log_order":
+                other = {"type": "order", **args}
+            elif function_call.name == "add_items_to_order":
+                other = {"type": "add_items", **args}
+            elif function_call.name == "change_orders_status_bulk":
+                other = {"type": "change_status_bulk", **args}
+            elif function_call.name == "find_orders":
+                other = {"type": "find_orders", **args}
+            elif function_call.name == "show_stuck_orders":
+                other = {"type": "stuck_orders", **args}
+            elif function_call.name == "show_active_orders":
+                other = {"type": "active_orders"}
+
+    if status_args is not None:
+        if tracking_args:
+            if not status_args.get("tracking_number"):
+                status_args["tracking_number"] = tracking_args.get("tracking_number", "")
+            if not status_args.get("carrier"):
+                status_args["carrier"] = tracking_args.get("carrier", "")
+        return {"type": "change_status", **status_args}
+    if tracking_args is not None:
+        return {"type": "set_tracking", **tracking_args}
+    if other is not None:
+        return other
 
     text_parts = [part.text for part in parts if getattr(part, "text", "")]
     return {"type": "reply", "text": "\n".join(text_parts).strip() or "Не понял вопрос, уточни, пожалуйста."}

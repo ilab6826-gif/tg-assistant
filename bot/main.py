@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import threading
+from typing import Optional
 
 import uvicorn
 from aiogram import Bot, Dispatcher, F
@@ -55,6 +56,9 @@ async def on_start(message: Message) -> None:
         "   1 — выкуплен · 2 — склад в Китае · 3 — Китай → Москва\n"
         "   4 — таможня · 5 — прибыл в Москву · 6 — передан в доставку\n"
         "   7 — доставлен\n\n"
+        "🚚 Трек последней мили — «трек A1042 СДЭК 1234567890».\n"
+        "   Клиент увидит номер в приложении и сможет открыть отслеживание.\n"
+        "   Если заказ ещё не на этапе 6, статус поднимется сам.\n\n"
         "📚 Менять статус сразу у пачки — «все заказы со статусом 2 переведи в 3»\n\n"
         "🔍 Искать заказы — «что с A1042», «покажи заказы @ivanov»\n\n"
         "📷 Фото товаров — пришли одно или сразу альбом с номером заказа\n"
@@ -357,6 +361,9 @@ def _format_orders(orders: list, query: str) -> str:
         who = order["username"] or order["full_name"] or "клиент не указан"
         lines.append(f"📦 {order['order_number']} · {who}")
         lines.append(f"   Статус {_status_short(order['status'])}")
+        track = _tracking_text(order)
+        if track:
+            lines.append(f"   {track}")
         lines.append(_format_items(order["items"], indent="   "))
         if order["sale_price"]:
             lines.append(f"   Итого продажа {_money(order['sale_price'])}")
@@ -378,17 +385,48 @@ def _format_stuck(orders: list) -> str:
     return "\n".join(lines)
 
 
-async def _notify_client(username: str, order_number: str, product: str, new_status: int) -> str:
+def _tracking_text(order: dict) -> str:
+    data = order.get("tracking") or {}
+    number = (data.get("number") or "").strip()
+    if not number:
+        return ""
+    label = (data.get("carrier_label") or "").strip()
+    return f"{label} {number}".strip() if label else f"Трек {number}"
+
+
+def _tracking_payload(order: dict) -> Optional[dict]:
+    data = order.get("tracking") or {}
+    return data if data.get("number") else None
+
+
+async def _notify_client(username: str, order_number: str, product: str, new_status: int,
+                         tracking: Optional[dict] = None) -> str:
     """Шлёт клиенту пуш о новом статусе и возвращает строку об итоге — для ответа владельцу."""
     if not username:
         return "ℹ️ Клиент не уведомлён: в заказе не указан @username."
     if not config.CLIENT_BOT_TOKEN:
         return "ℹ️ Клиент не уведомлён: клиентский бот не настроен."
 
-    sent = await client_bot.notify_status_change(username, order_number, product, new_status)
+    sent = await client_bot.notify_status_change(
+        username, order_number, product, new_status, tracking=tracking
+    )
     scheduler.schedule_review_request(username, order_number, product, new_status)
     if sent:
         return f"📨 Уведомление отправлено клиенту {username}."
+    return (
+        f"ℹ️ Клиент {username} ещё не открыл диалог с клиентским ботом — "
+        "уведомление не доставлено. Попроси его нажать /start."
+    )
+
+
+async def _notify_tracking(username: str, order_number: str, product: str, tracking: dict) -> str:
+    if not username:
+        return "ℹ️ Клиент не уведомлён: в заказе не указан @username."
+    if not config.CLIENT_BOT_TOKEN:
+        return "ℹ️ Клиент не уведомлён: клиентский бот не настроен."
+    sent = await client_bot.notify_tracking(username, order_number, product, tracking)
+    if sent:
+        return f"📨 Трек отправлен клиенту {username}."
     return (
         f"ℹ️ Клиент {username} ещё не открыл диалог с клиентским ботом — "
         "уведомление не доставлено. Попроси его нажать /start."
@@ -436,7 +474,8 @@ async def _apply_bulk_result(updated: list, new_status: int) -> str:
             username, order["order_number"], order["product"], new_status
         )
         if username and config.CLIENT_BOT_TOKEN and await client_bot.notify_status_change(
-            username, order["order_number"], order["product"], new_status
+            username, order["order_number"], order["product"], new_status,
+            tracking=_tracking_payload(order),
         ):
             notified += 1
         else:
@@ -529,17 +568,59 @@ async def _handle_text(message: Message, text: str) -> None:
         order_number = result.get("order_number", "")
         try:
             order = sheets_service.change_order_status(order_number, result.get("new_status"))
+            track_number = str(result.get("tracking_number") or "").strip()
+            if track_number:
+                order = sheets_service.set_tracking(
+                    order_number, track_number, str(result.get("carrier") or "")
+                )
         except ValueError as e:
             reply_text = f"⚠️ {e}"
         except Exception:
             logger.exception("Ошибка при изменении статуса заказа")
             reply_text = "⚠️ Не получилось изменить статус, попробуй позже."
         else:
-            new_status = int(result.get("new_status"))
+            new_status = int(order.get("status") or result.get("new_status"))
             status_label = config.ORDER_STATUSES[new_status - 1]
             product = order["product"]
             reply_text = f"✅ Статус заказа {order_number} ({product}) обновлён: {new_status} — {status_label}."
-            reply_text += "\n" + await _notify_client(order["username"], order_number, product, new_status)
+            track = _tracking_text(order)
+            if track:
+                reply_text += f"\n{track}"
+            reply_text += "\n" + await _notify_client(
+                order["username"], order_number, product, new_status,
+                tracking=_tracking_payload(order),
+            )
+
+    elif result["type"] == "set_tracking":
+        order_number = str(result.get("order_number") or "").strip().upper()
+        try:
+            order = sheets_service.set_tracking(
+                order_number,
+                str(result.get("tracking_number") or ""),
+                str(result.get("carrier") or ""),
+            )
+        except ValueError as e:
+            reply_text = f"⚠️ {e}"
+        except Exception:
+            logger.exception("Ошибка при записи трека заказа %s", order_number)
+            reply_text = "⚠️ Не получилось записать трек, попробуй позже."
+        else:
+            product = order["product"]
+            track = _tracking_text(order)
+            reply_text = f"✅ Трек заказа {order_number} ({product}) записан: {track}."
+            if order.get("status_changed"):
+                status_label = config.ORDER_STATUSES[order["status"] - 1]
+                reply_text += (
+                    f"\nСтатус обновлён: {order['status']} — {status_label}."
+                )
+                reply_text += "\n" + await _notify_client(
+                    order["username"], order_number, product, order["status"],
+                    tracking=_tracking_payload(order),
+                )
+            else:
+                reply_text += "\n" + await _notify_tracking(
+                    order["username"], order_number, product, order["tracking"]
+                )
 
     elif result["type"] == "change_status_bulk":
         from_status = int(result.get("from_status") or 0) or None

@@ -18,6 +18,7 @@
 10. Закупка (сколько потрачено на этот товар)
 11. Продажа (сколько заплатил клиент за этот товар)
 12. Фото (сколько фото приложено к заказу, сами файлы лежат в хранилище)
+13. Трек (номер последней мили: «СДЭК 1234567890»)
 
 Новые колонки дописываются автоматически при первом обращении, ручная
 миграция таблицы не нужна.
@@ -32,7 +33,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-from bot import config, photo_service
+from bot import config, photo_service, tracking
 
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -53,12 +54,14 @@ _STATUS_CHANGED_COL = 9
 _COST_COL = 10
 _SALE_COL = 11
 _PHOTO_COL = 12
+_TRACKING_COL = 13
 
 _HEADER_ROW = [
     "Юзернейм в ТГ", "Товар", "Размер", "Цвет", "ФИО", "Дата и время добавления",
     "Номер заказа", "Статус", "Дата смены статуса", "Закупка", "Продажа", "Фото",
+    "Трек",
 ]
-_LAST_COL_LETTER = "L"
+_LAST_COL_LETTER = "M"
 
 _worksheet = None
 
@@ -199,6 +202,15 @@ def _merge_rows(rows: list) -> dict:
         "sale_price": sale,
         "profit": sale - cost,
         "photo_count": int(_parse_money(_cell(first_row, _PHOTO_COL))),
+        "tracking": next(
+            (
+                parsed for parsed in (
+                    tracking.parse_cell(_cell(row, _TRACKING_COL)) for row, _ in rows
+                )
+                if parsed["number"]
+            ),
+            tracking.empty(),
+        ),
         "row_indexes": [index for _, index in rows],
         "row_index": first_index,
     }
@@ -249,13 +261,13 @@ def generate_order_number() -> str:
 
 
 def _item_row(item: dict, username: str, full_name: str, order_number: str,
-              status: int, now: str, photo: str = "") -> list:
+              status: int, now: str, photo: str = "", track: str = "") -> list:
     return [
         username or "", item.get("product", "") or "", item.get("size", "") or "",
         item.get("color", "") or "", full_name or "", now, order_number or "",
         str(status), now,
         _money_cell(item.get("cost_price")), _money_cell(item.get("sale_price")),
-        photo,
+        photo, track,
     ]
 
 
@@ -291,9 +303,10 @@ def add_items(order_number: str, items: Optional[list] = None) -> dict:
         raise ValueError(f"Заказ с номером {order_number} не найден")
 
     now = _now()
+    track = tracking.format_cell(order.get("tracking") or tracking.empty())
     rows = [
         _item_row(item, order["username"], order["full_name"],
-                  order["order_number"], order["status"], now)
+                  order["order_number"], order["status"], now, track=track)
         for item in items
     ]
     _get_worksheet().append_rows(rows, value_input_option="USER_ENTERED")
@@ -355,6 +368,8 @@ def find_orders(query: str, limit: int = 15) -> list:
             order["order_number"],
             _normalize_username(order["username"]),
             order["full_name"],
+            (order.get("tracking") or {}).get("number") or "",
+            (order.get("tracking") or {}).get("raw") or "",
             *(item["product"] for item in order["items"]),
         ]).lower()
         if needle in haystack:
@@ -408,6 +423,41 @@ def change_order_status(order_number: str, new_status: int) -> dict:
     _get_worksheet().batch_update(
         _status_updates(order, new_status, now), value_input_option="USER_ENTERED"
     )
+    return order
+
+
+def set_tracking(order_number: str, tracking_number: str, carrier: str = "") -> dict:
+    """
+    Записывает трек последней мили во все строки заказа.
+
+    Если заказ ещё не на этапе «Передан в доставку», поднимает его туда —
+    трек без этого этапа клиенту всё равно не нужен. Статус «Доставлен»
+    и выше не трогаем.
+    """
+    parsed = tracking.parse(tracking_number, carrier)
+    if not parsed["number"]:
+        raise ValueError("Не указан трек-номер")
+
+    order = get_order(order_number)
+    if order is None:
+        raise ValueError(f"Заказ с номером {order_number} не найден")
+
+    cell = tracking.format_cell(parsed)
+    updates = []
+    for row_index in order["row_indexes"]:
+        updates.append({
+            "range": gspread.utils.rowcol_to_a1(row_index, _TRACKING_COL),
+            "values": [[cell]],
+        })
+
+    status_changed = False
+    if order["status"] < config.LAST_MILE_STATUS:
+        updates.extend(_status_updates(order, config.LAST_MILE_STATUS, _now()))
+        status_changed = True
+
+    _get_worksheet().batch_update(updates, value_input_option="USER_ENTERED")
+    order["tracking"] = parsed
+    order["status_changed"] = status_changed
     return order
 
 

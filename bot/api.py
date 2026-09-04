@@ -43,6 +43,7 @@ def _enrich_order(order: dict) -> dict:
         }
         for item in order.get("items", [])
     ]
+    track = order.get("tracking") or {}
     return {
         "order_number": number,
         "created_at": order.get("created_at", ""),
@@ -52,6 +53,9 @@ def _enrich_order(order: dict) -> dict:
         "items": items,
         "product": order.get("product", ""),
         "photos": photos,
+        "tracking": track.get("number") or "",
+        "carrier": track.get("carrier_label") or "",
+        "tracking_url": track.get("url") or "",
     }
 
 

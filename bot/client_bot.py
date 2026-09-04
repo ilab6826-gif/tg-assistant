@@ -63,14 +63,23 @@ def _mini_app_keyboard() -> Optional[ReplyKeyboardMarkup]:
     )
 
 
-def _mini_app_inline_keyboard() -> Optional[InlineKeyboardMarkup]:
-    if not config.MINI_APP_URL:
+def _notify_keyboard(tracking_url: str = "") -> Optional[InlineKeyboardMarkup]:
+    rows = []
+    if config.MINI_APP_URL:
+        rows.append([
+            InlineKeyboardButton(text="📦 Открыть трекер", web_app=WebAppInfo(url=config.MINI_APP_URL))
+        ])
+    if tracking_url:
+        rows.append([
+            InlineKeyboardButton(text="🚚 Отследить посылку", url=tracking_url)
+        ])
+    if not rows:
         return None
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📦 Открыть трекер", web_app=WebAppInfo(url=config.MINI_APP_URL))]
-        ]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _mini_app_inline_keyboard() -> Optional[InlineKeyboardMarkup]:
+    return _notify_keyboard()
 
 
 def _money(value) -> str:
@@ -475,7 +484,8 @@ def _status_line(status: int, label: str) -> str:
     return f"{emoji} <b>{label}</b>"
 
 
-async def notify_status_change(username: str, order_number: str, product: str, new_status: int) -> bool:
+async def notify_status_change(username: str, order_number: str, product: str, new_status: int,
+                               tracking: Optional[dict] = None) -> bool:
     """
     Присылает клиенту пуш о новом статусе заказа.
     Возвращает False, если бот не настроен или клиент ещё не открыл диалог с ботом.
@@ -489,6 +499,7 @@ async def notify_status_change(username: str, order_number: str, product: str, n
 
     total = len(config.ORDER_STATUSES)
     label = config.ORDER_STATUSES[new_status - 1] if 1 <= new_status <= total else ""
+    track = tracking or {}
 
     lines = [
         f"Заказ <b>{html.escape(order_number)}</b> · обновление",
@@ -498,19 +509,57 @@ async def notify_status_change(username: str, order_number: str, product: str, n
     ]
     if product:
         lines.append(f"\n{html.escape(product)}")
+    if track.get("number"):
+        carrier = html.escape(track.get("carrier_label") or "Трек")
+        number = html.escape(track["number"])
+        lines.append(f"\n🚚 {carrier} <code>{number}</code>")
     if new_status >= total:
         lines.append("\nЗаказ доставлен. Спасибо, что выбрал нас!")
 
     try:
-        # HTML, поэтому номер и название товара из таблицы экранируем.
         await client_bot.send_message(
             chat_id,
             "\n".join(lines),
             parse_mode="HTML",
-            reply_markup=_mini_app_inline_keyboard(),
+            reply_markup=_notify_keyboard(track.get("url") or ""),
         )
     except Exception:
         logger.exception("Не удалось отправить уведомление клиенту @%s", username)
+        return False
+    return True
+
+
+async def notify_tracking(username: str, order_number: str, product: str, tracking: dict) -> bool:
+    """Пуш только про трек — когда статус уже «в доставке», а номер пришёл позже."""
+    if not client_bot:
+        return False
+
+    chat_id = clients_service.get_chat_id(username)
+    if not chat_id:
+        return False
+
+    number = (tracking or {}).get("number") or ""
+    if not number:
+        return False
+
+    carrier = html.escape((tracking.get("carrier_label") or "Трек"))
+    lines = [
+        f"Заказ <b>{html.escape(order_number)}</b> · трек отслеживания",
+        "",
+        f"🚚 {carrier} <code>{html.escape(number)}</code>",
+    ]
+    if product:
+        lines.append(f"\n{html.escape(product)}")
+
+    try:
+        await client_bot.send_message(
+            chat_id,
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=_notify_keyboard(tracking.get("url") or ""),
+        )
+    except Exception:
+        logger.exception("Не удалось отправить трек клиенту @%s", username)
         return False
     return True
 
