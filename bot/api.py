@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 
-from bot import config, photo_service, sheets_service
+from bot import client_bot, config, photo_service, referrals_service, sheets_service
 from bot.telegram_auth import TelegramAuthError, username_from_user, validate_init_data
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,23 @@ def _require_client_bot_token() -> str:
     return config.CLIENT_BOT_TOKEN
 
 
+def _referral_payload(username: str) -> dict:
+    data = referrals_service.summary(username)
+    return {
+        "code": data["code"],
+        "link": client_bot.referral_link(data["code"]),
+        "invited": data["invited"],
+        "rewarded": data["rewarded"],
+        "bonus": data["bonus"],
+        "your_bonus": config.REFERRAL_BONUS,
+        "friend_bonus": config.REFERRAL_FRIEND_BONUS,
+        "share_text": (
+            f"Заказываю вещи из Китая через {config.BRAND_NAME} — все заказы видно в приложении. "
+            f"По этой ссылке тебе дадут скидку {config.REFERRAL_FRIEND_BONUS} ₽ на первый заказ"
+        ),
+    }
+
+
 def _user_from_init_data(x_telegram_init_data: Optional[str]) -> dict:
     if not x_telegram_init_data:
         raise HTTPException(status_code=401, detail="Требуется авторизация через Telegram")
@@ -88,6 +105,7 @@ def get_my_orders(x_telegram_init_data: Optional[str] = Header(default=None, ali
             "needs_username": True,
             "user": {"first_name": user.get("first_name", "")},
             "statuses": config.ORDER_STATUSES,
+            "referral": None,
         }
 
     try:
@@ -104,6 +122,7 @@ def get_my_orders(x_telegram_init_data: Optional[str] = Header(default=None, ali
             "username": username,
         },
         "statuses": config.ORDER_STATUSES,
+        "referral": _referral_payload(username),
     }
 
 

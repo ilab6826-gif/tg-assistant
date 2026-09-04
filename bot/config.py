@@ -36,6 +36,10 @@ CLIENT_BOT_TOKEN = os.getenv("CLIENT_BOT_TOKEN", "")
 
 OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")  # может быть пустым при первом запуске
 
+# Твой @username — по этой ссылке клиент пишет отзыв в личку (фото + подпись).
+# Если пусто, бот возьмёт его из профиля, когда ты напишешь ассистенту.
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "").strip().lstrip("@")
+
 GOOGLE_SHEET_ID = _require("GOOGLE_SHEET_ID")
 GOOGLE_SHEET_WORKSHEET = os.getenv("GOOGLE_SHEET_WORKSHEET", "Заказы")
 GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
@@ -73,6 +77,20 @@ BRAND_NAME = os.getenv("BRAND_NAME", "PR0JECT")
 
 # Через сколько дней без смены статуса заказ считается зависшим.
 STUCK_ORDER_DAYS = int(os.getenv("STUCK_ORDER_DAYS", "10"))
+
+# Реферальная программа. Бонус начисляется, когда приглашённый друг оформляет
+# первый заказ: пригласившему — на следующий заказ, другу — скидка на текущий.
+# Скидку применяет владелец руками, бот только считает и напоминает.
+REFERRAL_BONUS = int(os.getenv("REFERRAL_BONUS", "500"))
+REFERRAL_FRIEND_BONUS = int(os.getenv("REFERRAL_FRIEND_BONUS", "500"))
+
+# Через сколько часов после доставки просить отзыв. 0 — сразу вместе с пушем
+# о доставке. Пара часов даёт клиенту распаковать заказ и посмотреть товар.
+REVIEW_DELAY_HOURS = float(os.getenv("REVIEW_DELAY_HOURS", "3"))
+
+# @username клиентского бота — нужен для реферальных ссылок. Если не задан,
+# бот сам узнаёт его при старте через getMe и запоминает в settings.
+CLIENT_BOT_USERNAME = os.getenv("CLIENT_BOT_USERNAME", "")
 
 # Этапы трекера заказа, индекс списка + 1 = число в колонке "Статус".
 # Если меняешь список — не забудь про уже записанные заказы: вставка пункта

@@ -84,7 +84,16 @@
   const stepperEl = document.getElementById("stepper");
   const toastEl = document.getElementById("toast");
 
+  const inviteCard = document.getElementById("invite-card");
+  const inviteSub = document.getElementById("invite-sub");
+  const inviteInvited = document.getElementById("invite-invited");
+  const inviteRewarded = document.getElementById("invite-rewarded");
+  const inviteBonus = document.getElementById("invite-bonus");
+  const inviteShare = document.getElementById("invite-share");
+  const inviteCopy = document.getElementById("invite-copy");
+
   let cachedOrders = [];
+  let cachedReferral = null;
   let activeFilter = "all";
   let toastTimer = null;
 
@@ -174,6 +183,10 @@
     return `${d}.${m}.${y}`;
   }
 
+  function formatMoney(value) {
+    return `${Number(value || 0).toLocaleString("ru-RU")} ₽`;
+  }
+
   function totalSteps(order) {
     return (order.statuses || []).length || 7;
   }
@@ -243,6 +256,13 @@
     galleryCounter.hidden = list.length < 2;
     galleryTrack.scrollLeft = 0;
     updateGalleryIndicator();
+
+    // Браузер возвращает прежнее смещение уже после отрисовки новых слайдов:
+    // без второго сброса заказ открывается на том фото, где его закрыли.
+    requestAnimationFrame(() => {
+      galleryTrack.scrollLeft = 0;
+      updateGalleryIndicator();
+    });
   }
 
   // ---------- Детали заказа ----------
@@ -462,6 +482,55 @@
     paintOrders();
   }
 
+  function renderInvite(referral) {
+    cachedReferral = referral || null;
+    const visible = !!(referral && referral.code);
+    inviteCard.classList.toggle("is-visible", visible);
+    if (!visible) return;
+
+    inviteSub.textContent =
+      `Друг оформляет первый заказ — тебе ${formatMoney(referral.your_bonus)} на следующий, ` +
+      `ему скидка ${formatMoney(referral.friend_bonus)} на первый.`;
+    inviteInvited.textContent = String(referral.invited || 0);
+    inviteRewarded.textContent = String(referral.rewarded || 0);
+    inviteBonus.textContent = formatMoney(referral.bonus);
+  }
+
+  async function copyInviteLink() {
+    if (!cachedReferral) return;
+    const value = cachedReferral.link || cachedReferral.code;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        throw new Error("clipboard");
+      }
+      showToast("Ссылка скопирована");
+      haptic("light");
+    } catch (err) {
+      showToast(cachedReferral.link ? "Не удалось скопировать" : `Код: ${cachedReferral.code}`);
+    }
+  }
+
+  inviteShare.addEventListener("click", () => {
+    if (!cachedReferral) return;
+    haptic("medium");
+    const link = cachedReferral.link;
+    if (link && tg && typeof tg.openTelegramLink === "function") {
+      const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(cachedReferral.share_text || "")}`;
+      try {
+        tg.openTelegramLink(share);
+        return;
+      } catch (err) {}
+    }
+    copyInviteLink();
+  });
+
+  inviteCopy.addEventListener("click", () => {
+    haptic("light");
+    copyInviteLink();
+  });
+
   async function loadOrders({ silent = false } = {}) {
     if (!silent) setLoading(true);
     else refreshBtn.classList.add("is-spinning");
@@ -473,6 +542,7 @@
       const name = user.first_name || (fallback && fallback.first_name) || "друг";
       heroGreeting.textContent = `Привет, ${name}`;
       renderOrdersList(payload.orders || [], { needsUsername: !!payload.needs_username });
+      renderInvite(payload.referral);
       if (silent) showToast("Заказы обновлены");
     } catch (e) {
       if (!silent) {

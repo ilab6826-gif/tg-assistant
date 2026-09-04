@@ -3,13 +3,13 @@
 напоминания не терялись при перезапуске бота (например, при деплое на Railway).
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from bot import clients_service, config, sheets_service
+from bot import client_bot, clients_service, config, reviews_service, sheets_service
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,41 @@ def add_reminder(chat_id: int, remind_at_iso: str, text: str) -> datetime:
         misfire_grace_time=3600,  # если бот был выключен - напомнит с опозданием до часа
     )
     return run_date
+
+
+def schedule_review_request(username: str, order_number: str, product: str, new_status: int) -> bool:
+    """
+    Ставит отложенный запрос отзыва, когда заказ дошёл до последнего этапа.
+    False, если спрашивать не нужно: статус не финальный, клиент не открывал
+    бота или по этому заказу отзыв уже запрашивали.
+    """
+    if new_status < len(config.ORDER_STATUSES) or not config.CLIENT_BOT_TOKEN:
+        return False
+
+    chat_id = clients_service.get_chat_id(username)
+    if not chat_id:
+        return False
+
+    if not reviews_service.mark_asked(order_number, username, chat_id):
+        return False
+
+    # Пять секунд сверху даже при нулевой задержке: пуш о доставке должен
+    # прийти раньше просьбы об оценке.
+    delay = timedelta(hours=max(0.0, config.REVIEW_DELAY_HOURS), seconds=5)
+    scheduler.add_job(
+        _ask_review,
+        trigger="date",
+        run_date=datetime.now(ZoneInfo(config.TIMEZONE)) + delay,
+        kwargs={"chat_id": chat_id, "order_number": order_number, "product": product},
+        id=f"review_{order_number}",
+        replace_existing=True,
+        misfire_grace_time=86400,  # бот мог быть выключен — спросим с опозданием до суток
+    )
+    return True
+
+
+async def _ask_review(chat_id: int, order_number: str, product: str) -> None:
+    await client_bot.send_review_request(chat_id, order_number, product)
 
 
 def list_reminders(chat_id: int) -> list:

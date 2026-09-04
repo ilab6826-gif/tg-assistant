@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0E1E39">
 <title>PR0JECT — Мои заказы</title>
 <!-- ?v= обязателен: webview Telegram держит старую статику после деплоя. -->
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=5">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -15,7 +15,16 @@
 
 <header id="topbar" class="topbar">
   <div class="topbar-inner">
-    <img class="brand-logo" src="logo.png?v=2" alt="PR0JECT">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7.35 20.05A9.3 9.3 0 1 1 16.65 20.05" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="16.65" cy="20.05" r="1.5" fill="var(--gold)"/>
+        <g transform="translate(5.4 5.125) scale(0.55)">
+          <path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke="var(--ivory)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </svg>
+      <img class="brand-logo" src="logo.png?v=3" alt="PR0JECT">
+    </div>
     <span id="topbar-title" class="topbar-title">Мои заказы</span>
     <button id="refresh-btn" class="icon-btn" type="button" aria-label="Обновить">
       <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3.5v6h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -97,6 +106,30 @@
         <p id="search-error" class="search-error"></p>
       </details>
 
+      <section id="invite-card" class="invite-card">
+        <span class="invite-eyebrow">Для друзей</span>
+        <h2 class="invite-title">Пригласи друга</h2>
+        <p class="invite-sub" id="invite-sub">Оба получите бонус, когда друг оформит первый заказ.</p>
+        <div class="invite-stats">
+          <div class="invite-stat">
+            <span class="invite-stat-value" id="invite-invited">0</span>
+            <span class="invite-stat-label">перешли</span>
+          </div>
+          <div class="invite-stat">
+            <span class="invite-stat-value" id="invite-rewarded">0</span>
+            <span class="invite-stat-label">заказали</span>
+          </div>
+          <div class="invite-stat">
+            <span class="invite-stat-value" id="invite-bonus">0 ₽</span>
+            <span class="invite-stat-label">твой бонус</span>
+          </div>
+        </div>
+        <button id="invite-share" class="btn-primary" type="button">
+          <span class="btn-label">Поделиться ссылкой</span>
+        </button>
+        <button id="invite-copy" class="invite-copy" type="button">Скопировать ссылку</button>
+      </section>
+
     </section>
 
     <!-- ================= ДЕТАЛИ ЗАКАЗА ================= -->
@@ -156,6 +189,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

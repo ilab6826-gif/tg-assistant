@@ -17,6 +17,8 @@ from bot import (
     gemini_service,
     memory_service,
     photo_service,
+    referrals_service,
+    reviews_service,
     scheduler,
     sheets_service,
 )
@@ -30,14 +32,16 @@ dp = Dispatcher()
 # Последний созданный заказ в каждом чате — чтобы фото без номера цеплялось к нему.
 _last_order_number = {}
 
-def _remember_owner(chat_id: int) -> None:
-    if clients_service.remember_owner_chat_id(chat_id):
-        logger.info("Запомнил чат владельца: %s", chat_id)
+def _remember_owner(message: Message) -> None:
+    if clients_service.remember_owner_chat_id(message.chat.id):
+        logger.info("Запомнил чат владельца: %s", message.chat.id)
+    if message.from_user and message.from_user.username:
+        clients_service.remember_owner_username(message.from_user.username)
 
 
 @dp.message(CommandStart())
 async def on_start(message: Message) -> None:
-    _remember_owner(message.chat.id)
+    _remember_owner(message)
     await message.answer(
         "Привет! Я твой личный ассистент. Умею:\n\n"
         "📌 Напоминать о задачах — просто напиши, например:\n"
@@ -57,6 +61,9 @@ async def on_start(message: Message) -> None:
         "в подписи, клиент пролистает их в приложении\n\n"
         "💬 Отвечать клиентам — их сообщения приходят сюда,\n"
         "ответь реплаем, и я передам\n\n"
+        "🎁 Рефералка — клиент зовёт друга своей ссылкой,\n"
+        "оба получают бонус, когда друг оформляет первый заказ\n\n"
+        "⭐ Отзывы — после доставки бот просит оценку, фото и комментарий\n\n"
         "🔍 Разбирать конкурентов/рекламные каналы — пришли ссылку на канал\n"
         "отдельным сообщением (t.me/somechannel или @somechannel)\n\n"
         "🎙 Понимаю и голосовые сообщения — просто наговори то же самое голосом\n\n"
@@ -67,7 +74,9 @@ async def on_start(message: Message) -> None:
         "/active — сколько сейчас активных заказов\n"
         "/stats — сводка и прибыль за 7 дней\n"
         "/month — сводка и прибыль за 30 дней\n"
-        "/stuck — заказы, которые давно стоят на месте\n\n"
+        "/stuck — заказы, которые давно стоят на месте\n"
+        "/reviews — последние отзывы клиентов\n"
+        "/refs — кто кого привёл и сколько бонусов висит\n\n"
         f"Твой chat_id: {message.chat.id} — сохрани его в переменную OWNER_CHAT_ID, "
         "если хочешь получать напоминания и уведомления именно сюда.\n\n"
         "⚠️ В заказе всегда указывай @username клиента — иначе он не увидит заказ "
@@ -207,6 +216,56 @@ async def on_stuck(message: Message) -> None:
     await message.answer(_format_stuck(orders))
 
 
+@dp.message(Command("reviews"))
+async def on_reviews(message: Message) -> None:
+    summary = reviews_service.stats()
+    items = reviews_service.recent()
+    if not summary["rated"]:
+        await message.answer("⭐ Отзывов пока нет — бот попросит их после первой доставки.")
+        return
+
+    lines = [
+        f"⭐ Отзывы: {summary['average']:.1f} из 5 "
+        f"({summary['rated']} оценок, фото: {summary['with_photo']})\n"
+    ]
+    for item in items:
+        who = f"@{item['username']}" if item["username"] else "клиент"
+        stars = "⭐" * (item["rating"] or 0)
+        extra = " 📷" if item.get("photo_path") else ""
+        lines.append(f"• {item['order_number']} · {who} · {stars}{extra}")
+        if item.get("comment"):
+            lines.append(f"  {item['comment'][:180]}")
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("refs"))
+async def on_refs(message: Message) -> None:
+    totals = referrals_service.totals()
+    top = referrals_service.top_referrers()
+    if not totals["invited"]:
+        await message.answer(
+            "🎁 Пока никто не пришёл по приглашению.\n"
+            "Клиенты зовут друзей командой /invite или кнопкой в приложении."
+        )
+        return
+
+    lines = [
+        f"🎁 Рефералка: {totals['invited']} переходов, "
+        f"{totals['rewarded']} заказов, {_money(totals['bonus'])} бонусов\n"
+    ]
+    for item in top:
+        lines.append(
+            f"• @{item['username']} — перешли {item['invited']}, "
+            f"заказали {item['rewarded']}, бонус {_money(item['bonus'])}"
+        )
+    lines.append(
+        f"\nСкидка другу {_money(config.REFERRAL_FRIEND_BONUS)} на первый заказ, "
+        f"пригласившему {_money(config.REFERRAL_BONUS)} на следующий. "
+        "Списываешь руками, бот только напоминает."
+    )
+    await message.answer("\n".join(lines))
+
+
 _ONLY_CHANNEL_RE = re.compile(
     r"^(?:https?://)?(?:t\.me/(?:s/)?[A-Za-z0-9_]{4,}/?|@[A-Za-z0-9_]{4,})$"
 )
@@ -327,11 +386,41 @@ async def _notify_client(username: str, order_number: str, product: str, new_sta
         return "ℹ️ Клиент не уведомлён: клиентский бот не настроен."
 
     sent = await client_bot.notify_status_change(username, order_number, product, new_status)
+    scheduler.schedule_review_request(username, order_number, product, new_status)
     if sent:
         return f"📨 Уведомление отправлено клиенту {username}."
     return (
         f"ℹ️ Клиент {username} ещё не открыл диалог с клиентским ботом — "
         "уведомление не доставлено. Попроси его нажать /start."
+    )
+
+
+async def _apply_referral_if_first(username: str, order_number: str) -> str:
+    """
+    Если это первый заказ человека, пришедшего по ссылке друга — начисляет бонус
+    и возвращает напоминание владельцу, какую скидку списать руками.
+    """
+    if not username:
+        return ""
+    try:
+        orders = sheets_service.get_orders_by_username(username)
+    except Exception:
+        logger.exception("Не удалось проверить, первый ли это заказ @%s", username)
+        return ""
+    if len(orders) != 1:
+        return ""
+
+    reward = referrals_service.reward_for_order(username, order_number)
+    if not reward:
+        return ""
+
+    referrer = reward["referrer_username"]
+    await client_bot.notify_referral_reward(referrer, username)
+    await client_bot.notify_friend_discount(username, order_number)
+    return (
+        f"\n\n🎁 Этот клиент пришёл от @{referrer}.\n"
+        f"Дай @{username} скидку {_money(config.REFERRAL_FRIEND_BONUS)} на этот заказ, "
+        f"@{referrer} — {_money(config.REFERRAL_BONUS)} на следующий."
     )
 
 
@@ -343,6 +432,9 @@ async def _apply_bulk_result(updated: list, new_status: int) -> str:
     notified, skipped = 0, []
     for order in updated:
         username = order["username"]
+        scheduler.schedule_review_request(
+            username, order["order_number"], order["product"], new_status
+        )
         if username and config.CLIENT_BOT_TOKEN and await client_bot.notify_status_change(
             username, order["order_number"], order["product"], new_status
         ):
@@ -367,7 +459,7 @@ async def _apply_bulk_result(updated: list, new_status: int) -> str:
 
 async def _handle_text(message: Message, text: str) -> None:
     """Общая обработка: напоминание/заказ/обычный ответ + запись в историю чата."""
-    _remember_owner(message.chat.id)
+    _remember_owner(message)
     history = memory_service.get_history(message.chat.id)
     result = gemini_service.process_message(text, conversation_history=history)
 
@@ -412,6 +504,8 @@ async def _handle_text(message: Message, text: str) -> None:
                     "\n\n⚠️ Не указан @username клиента — он не увидит заказ "
                     "в приложении и не получит уведомлений."
                 )
+            else:
+                reply_text += await _apply_referral_if_first(result.get("username", ""), order_number)
             _last_order_number[message.chat.id] = order_number
 
     elif result["type"] == "add_items":
@@ -567,7 +661,7 @@ async def on_photo(message: Message) -> None:
     новый заказ — создаём заказ и сразу прикладываем фото. Без подписи —
     цепляем к последнему заказу, с которым работали.
     """
-    _remember_owner(message.chat.id)
+    _remember_owner(message)
     caption = (message.caption or "").strip()
     order_number = await _resolve_photo_order(message, caption)
 
@@ -629,25 +723,22 @@ async def on_reply_to_client(message: Message) -> None:
         await message.answer("⚠️ Не получилось доставить ответ — возможно, клиент заблокировал бота.")
 
 
-async def forward_client_message(chat_id: int, username: str, first_name: str, text: str) -> bool:
-    """Пересылает владельцу сообщение клиента и запоминает, кому отвечать реплаем."""
+async def notify_owner_message(
+    text: str,
+    reply_chat_id: int = None,
+    reply_username: str = "",
+) -> None:
+    """Короткая пометка в ассистенте. Само сообщение клиента пересылает клиентский бот."""
     owner = clients_service.get_owner_chat_id()
     if not owner:
-        return False
+        logger.warning("Чат владельца неизвестен — не могу переслать уведомление.")
+        return
 
-    who = f"@{username}" if username else (first_name or "клиент без юзернейма")
-    try:
-        sent = await bot.send_message(
-            owner,
-            f"💬 Сообщение от {who}:\n\n{text}\n\n"
-            "Ответь на это сообщение реплаем — я передам его клиенту.",
+    sent = await bot.send_message(owner, text)
+    if reply_chat_id:
+        clients_service.remember_forwarded(
+            sent.message_id, reply_chat_id, reply_username or ""
         )
-    except Exception:
-        logger.exception("Не удалось переслать владельцу сообщение клиента %s", chat_id)
-        return False
-
-    clients_service.remember_forwarded(sent.message_id, chat_id, username or "")
-    return True
 
 
 @dp.message(F.voice)
@@ -684,7 +775,7 @@ def _run_api_server() -> None:
 
 async def main() -> None:
     scheduler.init(bot)
-    client_bot.forward_to_owner = forward_client_message
+    client_bot.notify_owner = notify_owner_message
     threading.Thread(target=_run_api_server, daemon=True).start()
 
     tasks = [dp.start_polling(bot)]

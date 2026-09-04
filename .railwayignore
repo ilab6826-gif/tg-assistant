@@ -1,0 +1,11 @@
+.pw-browsers
+promo
+backups
+venv
+.env
+*.sqlite
+photos
+review_photos
+credentials.json
+bot.log
+.DS_Store

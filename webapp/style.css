@@ -54,8 +54,11 @@ html, body {
   padding: 0;
   min-height: 100%;
   background: var(--navy);
-  overflow-x: hidden;
 }
+
+/* Только на html: тот же overflow на body делает его скролл-контейнером,
+   и тогда sticky-шапка перестаёт прилипать и уезжает вместе с контентом. */
+html { overflow-x: hidden; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -114,12 +117,25 @@ h1 { margin: 0; }
   gap: 12px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: opacity 260ms var(--ease-soft), transform 260ms var(--ease-soft);
+}
+
+.brand-mark {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
 .brand-logo {
   display: block;
   height: 19px;
   width: auto;
   opacity: 0.95;
-  transition: opacity 260ms var(--ease-soft), transform 260ms var(--ease-soft);
 }
 
 /* Компактный заголовок проявляется, когда крупный уезжает под панель. */
@@ -138,7 +154,7 @@ h1 { margin: 0; }
 }
 
 .topbar.is-stuck .topbar-title { opacity: 1; transform: translate(-50%, -50%); }
-.topbar.is-stuck .brand-logo { opacity: 0; transform: scale(0.9); }
+.topbar.is-stuck .brand { opacity: 0; transform: scale(0.9); }
 
 .icon-btn {
   width: 36px;
@@ -652,6 +668,89 @@ body.is-detail .hero { display: none; }
 
 .lookup-panel[open] summary { color: var(--text); }
 .lookup-panel[open] .lookup-chevron { transform: rotate(90deg); }
+
+/* ---------- Пригласить друга ---------- */
+
+.invite-card {
+  display: none;
+  margin-top: 26px;
+  padding: 22px 20px 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 0.5px solid var(--gold-line);
+}
+
+.invite-card.is-visible { display: block; }
+
+.invite-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.invite-title {
+  margin: 8px 0 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.invite-sub {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.invite-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0 16px;
+}
+
+.invite-stat {
+  padding: 12px 8px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.invite-stat-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.invite-stat-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.invite-card .btn-primary {
+  width: 100%;
+}
+
+.invite-copy {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.invite-copy:active { color: var(--text); }
 
 .search-form {
   display: flex;

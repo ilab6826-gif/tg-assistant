@@ -6,8 +6,13 @@ credentials.json
 reminders.sqlite
 conversation_history.sqlite
 clients.sqlite
+reviews.sqlite
+referrals.sqlite
 photos/
+review_photos/
 .DS_Store
 bot.log
 webapp/how-to-track.mp4
 backups/
+.pw-browsers/
+promo/out/

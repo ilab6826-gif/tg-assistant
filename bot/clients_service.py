@@ -76,6 +76,16 @@ def register(username: str, chat_id: int, first_name: str = "") -> None:
         conn.commit()
 
 
+def exists(username: str) -> bool:
+    """Знаем ли мы этого клиента. Проверять нужно до register(), иначе всегда True."""
+    key = normalize_username(username)
+    if not key:
+        return False
+    with closing(_connect()) as conn:
+        row = conn.execute("SELECT 1 FROM clients WHERE username = ?", (key,)).fetchone()
+    return row is not None
+
+
 def get_chat_id(username: str) -> Optional[int]:
     """Возвращает chat_id клиента по @username, либо None, если он ещё не открыл бота."""
     key = normalize_username(username)
@@ -126,6 +136,38 @@ def remember_owner_chat_id(chat_id: int) -> bool:
         return False
     set_setting(_OWNER_CHAT_KEY, str(chat_id))
     return True
+
+
+_OWNER_USERNAME_KEY = "owner_username"
+
+
+def get_owner_username() -> str:
+    """@username владельца без @ — для кнопки «написать отзыв в личку»."""
+    if config.OWNER_USERNAME:
+        return config.OWNER_USERNAME.strip().lstrip("@")
+    return (get_setting(_OWNER_USERNAME_KEY) or "").strip().lstrip("@")
+
+
+def remember_owner_username(username: str) -> None:
+    cleaned = (username or "").strip().lstrip("@")
+    if cleaned:
+        set_setting(_OWNER_USERNAME_KEY, cleaned)
+
+
+_CLIENT_BOT_USERNAME_KEY = "client_bot_username"
+
+
+def get_client_bot_username() -> str:
+    """@username клиентского бота для реферальных ссылок (без @)."""
+    if config.CLIENT_BOT_USERNAME:
+        return config.CLIENT_BOT_USERNAME.strip().lstrip("@")
+    return (get_setting(_CLIENT_BOT_USERNAME_KEY) or "").strip().lstrip("@")
+
+
+def remember_client_bot_username(username: str) -> None:
+    cleaned = (username or "").strip().lstrip("@")
+    if cleaned:
+        set_setting(_CLIENT_BOT_USERNAME_KEY, cleaned)
 
 
 def remember_forwarded(owner_message_id: int, client_chat_id: int, client_username: str = "") -> None:
