@@ -7,7 +7,15 @@ from typing import Optional
 import uvicorn
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import BotCommand, KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import (
+    BotCommand,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+)
 
 from bot import (
     api,
@@ -43,17 +51,31 @@ BTN_REMINDERS = "📋 Напоминания"
 BTN_REVIEWS = "⭐ Отзывы"
 BTN_REFS = "🎁 Рефералка"
 BTN_HELP = "❓ Справка"
+BTN_HOME = "🏠 Меню"
+
+_HOME_TEXT = (
+    "<b>PR0JECT · ассистент</b>\n\n"
+    "Заказ, статус и трек — пиши текстом.\n"
+    "Сводки — кнопками. Панель всегда под рукой: в этом сообщении и внизу экрана."
+)
+
+
+def _home_rows() -> list:
+    return [
+        [BTN_ACTIVE, BTN_STUCK],
+        [BTN_TODAY, BTN_WEEK],
+        [BTN_MONTH, BTN_REMINDERS],
+        [BTN_REVIEWS, BTN_REFS],
+        [BTN_HOME, BTN_HELP],
+    ]
 
 
 def _owner_keyboard() -> ReplyKeyboardMarkup:
-    """Постоянная клавиатура внизу чата: сводки одним тапом, поле ввода свободно."""
+    """Закреплена внизу чата и не прячется — ботом пользуешься только ты."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_ACTIVE), KeyboardButton(text=BTN_STUCK)],
-            [KeyboardButton(text=BTN_TODAY), KeyboardButton(text=BTN_WEEK)],
-            [KeyboardButton(text=BTN_MONTH), KeyboardButton(text=BTN_REMINDERS)],
-            [KeyboardButton(text=BTN_REVIEWS), KeyboardButton(text=BTN_REFS)],
-            [KeyboardButton(text=BTN_HELP)],
+            [KeyboardButton(text=label) for label in row]
+            for row in _home_rows()
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -61,14 +83,48 @@ def _owner_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def _home_inline() -> InlineKeyboardMarkup:
+    """Та же панель прямо в сообщении — это и есть главный экран."""
+    mapping = {
+        BTN_ACTIVE: "active",
+        BTN_STUCK: "stuck",
+        BTN_TODAY: "today",
+        BTN_WEEK: "week",
+        BTN_MONTH: "month",
+        BTN_REMINDERS: "reminders",
+        BTN_REVIEWS: "reviews",
+        BTN_REFS: "refs",
+        BTN_HOME: "home",
+        BTN_HELP: "help",
+    }
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, callback_data=f"home:{mapping[label]}") for label in row]
+        for row in _home_rows()
+    ])
+
+
 async def _reply(message: Message, text: str) -> None:
-    await message.answer(text, reply_markup=_owner_keyboard())
+    """В каждом ответе — панель кнопок, чтобы главный экран не терялся."""
+    await message.answer(text, reply_markup=_home_inline())
+
+
+async def _send_home(message: Message) -> None:
+    """Главный экран: кнопки в сообщении + те же, закреплённые внизу чата."""
+    await message.answer(
+        _HOME_TEXT,
+        parse_mode="HTML",
+        reply_markup=_home_inline(),
+    )
+    await message.answer(
+        "Те же кнопки закреплены внизу экрана — не скроются.",
+        reply_markup=_owner_keyboard(),
+    )
 
 
 def _help_text(chat_id: int) -> str:
     return (
-        "Я твой личный ассистент. Снизу кнопки — сводки одним тапом. "
-        "Заказы, статусы и треки пиши обычным текстом.\n\n"
+        "Я твой личный ассистент. Все сводки — кнопками на главном экране "
+        "и теми же кнопками внизу чата. Заказы, статусы и треки пиши текстом.\n\n"
         "📌 Напоминание — «напомни завтра в 12:00 обработать заказ»\n\n"
         "📦 Новый заказ — опиши свободным текстом, можно сразу несколько товаров:\n"
         "«@ivanov заказал кроссовки Nike 42 чёрные за 7500 и куртку\n"
@@ -102,11 +158,7 @@ def _remember_owner(message: Message) -> None:
 @dp.message(CommandStart())
 async def on_start(message: Message) -> None:
     _remember_owner(message)
-    await _reply(
-        message,
-        "На месте. Кнопки внизу — сводки и списки.\n"
-        "Заказ, статус или трек пиши как обычно, справка — нижней кнопкой.",
-    )
+    await _send_home(message)
 
 
 @dp.message(Command("reminders"))
@@ -308,14 +360,42 @@ _OWNER_BUTTONS = {
     BTN_REVIEWS: on_reviews,
     BTN_REFS: on_refs,
     BTN_HELP: on_help,
+    BTN_HOME: on_start,
+}
+
+_HOME_HANDLERS = {
+    "active": on_active,
+    "stuck": on_stuck,
+    "today": on_orders_today,
+    "week": on_stats,
+    "month": on_month,
+    "reminders": on_reminders,
+    "reviews": on_reviews,
+    "refs": on_refs,
+    "help": on_help,
+    "home": on_start,
 }
 
 
 @dp.message(F.text.in_(set(_OWNER_BUTTONS)))
 async def on_menu_button(message: Message) -> None:
-    """Кнопки клавиатуры — те же сводки, что и slash-команды."""
+    """Кнопки внизу экрана — те же сводки, что и на главном экране."""
     _remember_owner(message)
     await _OWNER_BUTTONS[message.text](message)
+
+
+@dp.callback_query(F.data.startswith("home:"))
+async def on_home_callback(query: CallbackQuery) -> None:
+    """Кнопки на карточке главного экрана."""
+    await query.answer()
+    if query.message:
+        clients_service.remember_owner_chat_id(query.message.chat.id)
+    if query.from_user and query.from_user.username:
+        clients_service.remember_owner_username(query.from_user.username)
+    key = (query.data or "").split(":", 1)[-1]
+    handler = _HOME_HANDLERS.get(key)
+    if handler and query.message:
+        await handler(query.message)
 
 
 _ONLY_CHANNEL_RE = re.compile(
@@ -863,7 +943,7 @@ async def notify_owner_message(
         logger.warning("Чат владельца неизвестен — не могу переслать уведомление.")
         return
 
-    sent = await bot.send_message(owner, text)
+    sent = await bot.send_message(owner, text, reply_markup=_owner_keyboard())
     if reply_chat_id:
         clients_service.remember_forwarded(
             sent.message_id, reply_chat_id, reply_username or ""
@@ -904,7 +984,7 @@ def _run_api_server() -> None:
 
 async def _setup_owner_commands() -> None:
     await bot.set_my_commands([
-        BotCommand(command="start", description="Клавиатура и короткий экран"),
+        BotCommand(command="start", description="Главный экран со всеми кнопками"),
         BotCommand(command="active", description="Активные заказы"),
         BotCommand(command="stuck", description="Зависшие заказы"),
         BotCommand(command="orders_today", description="Заказы за сегодня"),
