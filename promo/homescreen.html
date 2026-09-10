@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>PR0JECT — на главный экран</title>
+<style>
+  :root {
+    --navy: #0E1E39;
+    --navy-deep: #060F20;
+    --gold: #D8B45A;
+    --ivory: #F6F4EF;
+    --stage-w: 1280px;
+    --stage-h: 720px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: var(--stage-w);
+    height: var(--stage-h);
+    overflow: hidden;
+    background: #000;
+  }
+
+  body {
+    font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  #stage {
+    position: relative;
+    width: var(--stage-w);
+    height: var(--stage-h);
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 78% 42%, #16294a 0%, rgba(14,30,57,0) 62%),
+      radial-gradient(90% 70% at 12% 88%, #13294c 0%, rgba(14,30,57,0) 60%),
+      linear-gradient(168deg, #10203c 0%, var(--navy) 46%, var(--navy-deep) 100%);
+  }
+
+  #glow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1100px;
+    height: 1100px;
+    margin: -550px 0 0 -550px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(216,180,90,0.22) 0%, rgba(216,180,90,0.07) 34%, rgba(216,180,90,0) 66%);
+    filter: blur(10px);
+    pointer-events: none;
+  }
+
+  #vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 44%, rgba(0,0,0,0.55) 100%);
+  }
+
+  #caption {
+    position: absolute;
+    left: 104px;
+    top: 50%;
+    width: 620px;
+    transform-origin: left center;
+    will-change: transform, opacity, filter;
+  }
+
+  #eyebrow {
+    display: block;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 22px;
+  }
+
+  #headline {
+    display: block;
+    font-size: 60px;
+    line-height: 1.06;
+    font-weight: 600;
+    letter-spacing: -0.032em;
+    color: var(--ivory);
+    white-space: nowrap;
+  }
+
+  #brandmark {
+    position: absolute;
+    left: 106px;
+    bottom: 58px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: rgba(246,244,239,0.34);
+  }
+
+  #phone {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 390px;
+    height: 844px;
+    transform-origin: top left;
+    will-change: transform, opacity;
+  }
+
+  #phone-body {
+    position: absolute;
+    inset: -13px;
+    border-radius: 66px;
+    padding: 13px;
+    background: linear-gradient(150deg, #6b7183 0%, #262b38 22%, #14171f 50%, #2d3341 78%, #5d6274 100%);
+    box-shadow:
+      0 2px 1px rgba(255,255,255,0.20) inset,
+      0 60px 120px rgba(0,0,0,0.62),
+      0 24px 48px rgba(0,0,0,0.45),
+      0 0 0 1px rgba(0,0,0,0.6);
+  }
+
+  #screen-wrap {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    border-radius: 53px;
+    overflow: hidden;
+    background: var(--navy);
+  }
+
+  #screen {
+    position: absolute;
+    left: 0;
+    top: 56px;
+    width: 390px;
+    height: 788px;
+    border: 0;
+    display: block;
+  }
+
+  #statusbar {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 56px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 30px 0;
+    color: var(--ivory);
+  }
+
+  .sb-time { font-size: 15px; font-weight: 600; }
+  .sb-icons { display: flex; align-items: center; gap: 6px; }
+
+  #island {
+    position: absolute;
+    left: 50%;
+    top: 11px;
+    width: 118px;
+    height: 34px;
+    margin-left: -59px;
+    border-radius: 20px;
+    background: #05070c;
+    z-index: 5;
+  }
+
+  #glare {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    background: linear-gradient(122deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 24%, rgba(255,255,255,0) 45%);
+  }
+
+  /* Экран «домой»: иконка PR0JECT садится в док. */
+  #homespring {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    opacity: 0;
+    background:
+      radial-gradient(80% 50% at 50% 0%, #1d3a68 0%, #10243f 42%, #0A1729 100%);
+  }
+
+  #homespring-status {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 30px 0;
+    color: var(--ivory);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  #homespring-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px 18px;
+    padding: 28px 28px 0;
+  }
+
+  .hs-app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hs-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.28);
+  }
+
+  .hs-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(246,244,239,0.55);
+    letter-spacing: -0.01em;
+  }
+
+  #dock {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 22px;
+    height: 108px;
+    border-radius: 32px;
+    background: rgba(246,244,239,0.10);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    backdrop-filter: blur(22px) saturate(140%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    padding: 0 10px;
+  }
+
+  #hero-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #1A3157 0%, #0E1E39 70%);
+    box-shadow:
+      0 0 0 1px rgba(216,180,90,0.35),
+      0 10px 24px rgba(0,0,0,0.40),
+      0 0 28px rgba(216,180,90,0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center;
+    will-change: transform, opacity;
+  }
+
+  #hero-icon svg { width: 30px; height: 30px; }
+
+  #hero-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 72px;
+  }
+
+  #cover {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(70% 55% at 50% 46%, rgba(216,180,90,0.14) 0%, rgba(14,30,57,0) 70%),
+      linear-gradient(170deg, #10203c 0%, var(--navy) 50%, var(--navy-deep) 100%);
+  }
+
+  #cover-logo { width: 300px; height: auto; }
+  #cover-tag {
+    margin-top: 30px;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: rgba(246,244,239,0.86);
+    text-align: center;
+    line-height: 1.15;
+  }
+  #cover-rule {
+    margin-top: 28px;
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(216,180,90,0), var(--gold), rgba(216,180,90,0));
+  }
+  #cover-note {
+    margin-top: 22px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="glow"></div>
+
+  <div id="caption">
+    <span id="eyebrow"></span>
+    <span id="headline"></span>
+  </div>
+  <div id="brandmark">PR0JECT</div>
+
+  <div id="phone">
+    <div id="phone-body">
+      <div id="screen-wrap">
+        <iframe id="screen" src="/app/index.html" scrolling="no"></iframe>
+        <div id="statusbar">
+          <span class="sb-time">9:41</span>
+          <span class="sb-icons">
+            <svg width="19" height="12" viewBox="0 0 19 12" fill="#F6F4EF">
+              <rect x="0" y="8" width="3" height="4" rx="1"/>
+              <rect x="5" y="5.8" width="3" height="6.2" rx="1"/>
+              <rect x="10" y="3.4" width="3" height="8.6" rx="1"/>
+              <rect x="15" y="1" width="3" height="11" rx="1"/>
+            </svg>
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="#F6F4EF" stroke-width="1.6" stroke-linecap="round">
+              <path d="M1.3 4.3a11 11 0 0 1 14.4 0"/>
+              <path d="M4.1 7.1a7 7 0 0 1 8.8 0"/>
+              <path d="M6.9 9.9a3 3 0 0 1 3.2 0"/>
+            </svg>
+            <svg width="27" height="13" viewBox="0 0 27 13" fill="none">
+              <rect x="0.6" y="0.6" width="22" height="11.8" rx="3.4" stroke="rgba(246,244,239,0.42)" stroke-width="1.1"/>
+              <rect x="2.2" y="2.2" width="15" height="8.6" rx="2.2" fill="#F6F4EF"/>
+              <path d="M24.5 4.5c1.1.4 1.1 3.6 0 4V4.5Z" fill="rgba(246,244,239,0.42)"/>
+            </svg>
+          </span>
+        </div>
+        <div id="island"></div>
+
+        <div id="homespring">
+          <div id="homespring-status">
+            <span>9:41</span>
+            <span style="opacity:0.7">●●●●</span>
+          </div>
+          <div id="homespring-grid"></div>
+          <div id="dock">
+            <div class="hs-icon" style="background:#3A3A3C"></div>
+            <div class="hs-icon" style="background:#1C3D6E"></div>
+            <div class="hs-icon" style="background:#2C2C2E"></div>
+            <div id="hero-wrap">
+              <div id="hero-icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="#D8B45A" stroke-width="1.7" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <span class="hs-name" style="color:#D8B45A">PR0JECT</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="glare"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="vignette"></div>
+
+  <div id="cover">
+    <img id="cover-logo" src="/app/logo.png" alt="PR0JECT">
+    <div id="cover-tag">Закажи. Следи с экрана.</div>
+    <div id="cover-rule"></div>
+    <div id="cover-note">На главный экран</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const el = (id) => document.getElementById(id);
+  const stage = el("stage");
+  const glow = el("glow");
+  const caption = el("caption");
+  const eyebrow = el("eyebrow");
+  const headline = el("headline");
+  const brandmark = el("brandmark");
+  const phone = el("phone");
+  const screen = el("screen");
+  const cover = el("cover");
+  const coverLogo = el("cover-logo");
+  const coverTag = el("cover-tag");
+  const coverRule = el("cover-rule");
+  const coverNote = el("cover-note");
+  const homespring = el("homespring");
+  const heroIcon = el("hero-icon");
+
+  const PHONE_W = 390;
+  const PHONE_H = 844;
+  const BEZEL = 13;
+
+  const FORMATS = {
+    wide: {
+      w: 1280, h: 720, camCx: 1017, band: 0,
+      wide: 0.745, close: 0.86,
+      cropTop: 70,
+      caption: {
+        left: 104, width: 620, top: "50%", align: "left",
+        origin: "left center", eyebrow: 15, headline: 58, gap: 22,
+        base: (dy) => `translateY(calc(-50% + ${dy}px))`,
+      },
+      brand: { left: "106px", right: "auto", bottom: "58px", align: "left" },
+      glow: { x: "50%", y: "50%" },
+    },
+    vertical: {
+      w: 720, h: 1280, camCx: 360, band: 118,
+      wide: 0.88, close: 0.98,
+      cropTop: 168,
+      caption: {
+        left: 48, width: 624, top: "86px", align: "center",
+        origin: "center top", eyebrow: 13, headline: 42, gap: 16,
+        base: (dy) => `translateY(${dy}px)`,
+      },
+      brand: { left: "0", right: "0", bottom: "52px", align: "center" },
+      glow: { x: "50%", y: "62%" },
+    },
+  };
+
+  const FORMAT = new URLSearchParams(location.search).get("format") === "vertical"
+    ? "vertical" : "wide";
+  const L = FORMATS[FORMAT];
+  const CAM_CX = L.camCx;
+  const WIDE = L.wide;
+  const CLOSE = L.close;
+  const OFFSCREEN = L.h + 760;
+
+  function applyLayout() {
+    const root = document.documentElement.style;
+    root.setProperty("--stage-w", `${L.w}px`);
+    root.setProperty("--stage-h", `${L.h}px`);
+    const c = L.caption;
+    caption.style.left = `${c.left}px`;
+    caption.style.width = `${c.width}px`;
+    caption.style.top = c.top;
+    caption.style.textAlign = c.align;
+    caption.style.transformOrigin = c.origin;
+    eyebrow.style.fontSize = `${c.eyebrow}px`;
+    eyebrow.style.marginBottom = `${c.gap}px`;
+    headline.style.fontSize = `${c.headline}px`;
+    brandmark.style.left = L.brand.left;
+    brandmark.style.right = L.brand.right;
+    brandmark.style.bottom = L.brand.bottom;
+    brandmark.style.textAlign = L.brand.align;
+    glow.style.left = L.glow.x;
+    glow.style.top = L.glow.y;
+    if (FORMAT === "vertical") {
+      stage.style.background = [
+        "radial-gradient(95% 52% at 50% 58%, #16294a 0%, rgba(14,30,57,0) 62%)",
+        "linear-gradient(168deg, #10203c 0%, #0E1E39 46%, #060F20 100%)",
+      ].join(",");
+    }
+  }
+  applyLayout();
+
+  const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const outCubic = (p) => 1 - Math.pow(1 - p, 3);
+  const outQuint = (p) => 1 - Math.pow(1 - p, 5);
+  const outExpo = (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p));
+  const outBack = (p) => {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+  };
+  const inOutCubic = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+  const win = (lt, t0, t1) => clamp((lt - t0) / Math.max(0.0001, t1 - t0));
+
+  const appDoc = () => screen.contentDocument;
+  const q = (sel) => appDoc() && appDoc().querySelector(sel);
+
+  let ready = false;
+
+  const DUMMIES = [
+    ["#3B82F6", "Фото"], ["#34C759", "Связь"], ["#8E8E93", "Заметки"], ["#FF9F0A", "Календарь"],
+    ["#5E5CE6", "Музыка"], ["#FF453A", "Почта"], ["#64D2FF", "Карты"], ["#BF5AF2", "Файлы"],
+  ];
+
+  function fillGrid() {
+    const grid = el("homespring-grid");
+    grid.innerHTML = DUMMIES.map(([bg, name]) => (
+      `<div class="hs-app"><div class="hs-icon" style="background:${bg}"></div><span class="hs-name">${name}</span></div>`
+    )).join("");
+  }
+  fillGrid();
+
+  function prepareApp() {
+    const doc = appDoc();
+    if (!doc) return;
+    const style = doc.createElement("style");
+    style.textContent = `
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 1ms !important;
+        transition-delay: 0ms !important;
+      }
+      html { scroll-behavior: auto !important; }
+      ::-webkit-scrollbar { display: none !important; }
+      #invite-card, .lookup-panel { display: none !important; }
+      #homescreen-card {
+        box-shadow: 0 0 0 1px rgba(216,180,90,0.40), 0 16px 36px rgba(4,10,22,0.40);
+      }
+    `;
+    doc.head.appendChild(style);
+
+    const tap = doc.createElement("div");
+    tap.id = "promo-tap";
+    tap.style.cssText = `
+      position: fixed; z-index: 999; width: 76px; height: 76px; margin: -38px 0 0 -38px;
+      border-radius: 50%; pointer-events: none; opacity: 0;
+      background: radial-gradient(circle, rgba(216,180,90,0.42) 0%, rgba(216,180,90,0.14) 52%, rgba(216,180,90,0) 72%);
+      box-shadow: 0 0 0 2px rgba(216,180,90,0.55);
+    `;
+    doc.body.appendChild(tap);
+
+    const card = doc.getElementById("homescreen-card");
+    if (card) card.classList.add("is-visible");
+    ready = true;
+  }
+
+  screen.addEventListener("load", prepareApp);
+
+  function tapAt(sel, p) {
+    if (!ready) return;
+    const tap = appDoc().getElementById("promo-tap");
+    const node = q(sel);
+    if (!tap || !node) return;
+    if (p <= 0 || p >= 1) { tap.style.opacity = "0"; return; }
+    const r = node.getBoundingClientRect();
+    tap.style.left = `${r.left + r.width / 2}px`;
+    tap.style.top = `${r.top + r.height / 2}px`;
+    tap.style.opacity = String(Math.sin(Math.PI * p) * 0.92);
+    tap.style.transform = `scale(${lerp(0.45, 1.5, outCubic(p))})`;
+  }
+
+  function pressAdd(p) {
+    if (!ready) return;
+    const btn = q("#homescreen-add");
+    if (!btn) return;
+    const k = p > 0 && p < 1 ? lerp(1, 0.96, Math.sin(Math.PI * p)) : 1;
+    btn.style.transform = `scale(${k})`;
+  }
+
+  const yCenter = (s) =>
+    L.band + (L.h - L.band - (PHONE_H + BEZEL * 2) * s) / 2 + BEZEL * s;
+  const yTop = (s, margin) => L.band + margin + BEZEL * s;
+
+  function camera(scale, y, opacity) {
+    const x = CAM_CX - (PHONE_W / 2) * scale;
+    phone.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    phone.style.opacity = String(opacity === undefined ? 1 : opacity);
+  }
+
+  function camFramed(scale, topward, opacity) {
+    camera(scale, lerp(yCenter(scale), yTop(scale, L.cropTop), topward || 0), opacity);
+  }
+
+  function setCaption(eb, hl) {
+    if (eyebrow.dataset.v !== eb) { eyebrow.textContent = eb; eyebrow.dataset.v = eb; }
+    if (headline.dataset.v !== hl) {
+      headline.innerHTML = hl.split("\n").join("<br>");
+      headline.dataset.v = hl;
+    }
+  }
+
+  function captionAnim(gt, gdur) {
+    const inP = outCubic(clamp(gt / 0.42));
+    const outP = outCubic(clamp((gdur - gt) / 0.32));
+    const op = inP * outP;
+    const dy = (1 - inP) * 22 - (1 - outP) * 14;
+    caption.style.opacity = String(op);
+    caption.style.transform = L.caption.base(dy);
+    caption.style.filter = `blur(${(1 - inP) * 6 + (1 - outP) * 4}px)`;
+  }
+
+  const TIMELINE = [
+    {
+      name: "intro",
+      dur: 0.55,
+      draw(lt, dur) {
+        const a = outExpo(win(lt, 0.04, 0.42));
+        const out = win(lt, dur - 0.22, dur);
+        cover.style.opacity = String(1 - outCubic(out));
+        coverLogo.style.opacity = String(a);
+        coverLogo.style.transform = `scale(${lerp(1.08, 1, a)})`;
+        coverLogo.style.filter = `blur(${(1 - a) * 8}px)`;
+        coverTag.style.opacity = "0";
+        coverRule.style.width = `${outQuint(win(lt, 0.22, 0.58)) * 240}px`;
+        coverNote.style.opacity = String(outCubic(win(lt, 0.28, 0.55)) * 0.9);
+        caption.style.opacity = "0";
+        brandmark.style.opacity = "0";
+        homespring.style.opacity = "0";
+        screen.style.opacity = "1";
+        camera(WIDE, OFFSCREEN);
+        glow.style.opacity = "0";
+      },
+    },
+    {
+      name: "card",
+      dur: 1.35,
+      eyebrow: "Новое",
+      headline: "Один тап —\nи на экране",
+      draw(lt) {
+        cover.style.opacity = "0";
+        homespring.style.opacity = "0";
+        screen.style.opacity = "1";
+        const rise = outExpo(win(lt, 0, 0.85));
+        camFramed(lerp(WIDE, CLOSE, inOutCubic(win(lt, 0.55, 1.45))), 0.15, clamp(rise * 1.7));
+        glow.style.opacity = String(rise * 0.95);
+        brandmark.style.opacity = String(outCubic(win(lt, 0.35, 0.85)));
+      },
+    },
+    {
+      name: "tap",
+      dur: 0.80,
+      eyebrow: "Новое",
+      headline: "Один тап —\nи на экране",
+      draw(lt) {
+        cover.style.opacity = "0";
+        homespring.style.opacity = "0";
+        screen.style.opacity = "1";
+        camFramed(CLOSE, 0.22);
+        glow.style.opacity = "0.95";
+        brandmark.style.opacity = "1";
+        tapAt("#homescreen-add", win(lt, 0.05, 0.62));
+        pressAdd(win(lt, 0.18, 0.55));
+      },
+    },
+    {
+      name: "home",
+      dur: 1.35,
+      eyebrow: "PR0JECT",
+      headline: "Заказы всегда\nпод рукой",
+      draw(lt) {
+        cover.style.opacity = "0";
+        pressAdd(0);
+        tapAt("#homescreen-add", 0);
+        const fade = outCubic(win(lt, 0, 0.16));
+        homespring.style.opacity = String(fade);
+        screen.style.opacity = String(1 - fade);
+        const pop = outBack(win(lt, 0.06, 0.48));
+        heroIcon.style.opacity = String(clamp(pop * 1.2));
+        heroIcon.style.transform = `scale(${lerp(0.16, 1, pop)})`;
+        camFramed(lerp(CLOSE, WIDE, inOutCubic(win(lt, 0.40, 1.35))), 0);
+        glow.style.opacity = "1";
+        brandmark.style.opacity = "1";
+      },
+    },
+    {
+      name: "outro",
+      dur: 0.95,
+      draw(lt) {
+        caption.style.opacity = "0";
+        const away = inOutCubic(win(lt, 0, 0.48));
+        const s = lerp(WIDE, 0.68, away);
+        camera(s, yCenter(s) + away * 36, 1 - away);
+        brandmark.style.opacity = String(1 - away);
+        glow.style.opacity = String(0.95 * (1 - away * 0.55));
+        homespring.style.opacity = String(1 - away);
+        screen.style.opacity = "0";
+
+        const on = outCubic(win(lt, 0.12, 0.46));
+        cover.style.opacity = String(on);
+        coverLogo.style.opacity = "1";
+        coverLogo.style.transform = `scale(${lerp(1.05, 1, on)})`;
+        coverLogo.style.filter = "blur(0px)";
+        coverTag.style.opacity = String(outCubic(win(lt, 0.22, 0.52)));
+        coverTag.style.transform = "translateY(0px)";
+        coverRule.style.width = `${outQuint(win(lt, 0.28, 0.62)) * 260}px`;
+        coverNote.style.opacity = String(outCubic(win(lt, 0.36, 0.68)) * 0.92);
+      },
+    },
+  ];
+
+  let clock = 0;
+  TIMELINE.forEach((s) => { s.start = clock; clock += s.dur; });
+  const TOTAL = clock;
+
+  TIMELINE.forEach((s, i) => {
+    if (!s.headline) return;
+    let first = i;
+    while (first > 0 && TIMELINE[first - 1].headline === s.headline) first -= 1;
+    let last = i;
+    while (last < TIMELINE.length - 1 && TIMELINE[last + 1].headline === s.headline) last += 1;
+    s.capStart = TIMELINE[first].start;
+    s.capDur = TIMELINE[last].start + TIMELINE[last].dur - s.capStart;
+  });
+
+  function seek(t) {
+    t = clamp(t, 0, TOTAL - 0.001);
+    let idx = 0;
+    for (let i = 0; i < TIMELINE.length; i += 1) {
+      if (t >= TIMELINE[i].start) idx = i;
+    }
+    const s = TIMELINE[idx];
+    if (s.headline) {
+      setCaption(s.eyebrow || "", s.headline);
+      captionAnim(t - s.capStart, s.capDur);
+    } else {
+      caption.style.opacity = "0";
+    }
+    if (s.name !== "intro" && s.name !== "outro") cover.style.opacity = "0";
+    try { s.draw(t - s.start, s.dur); } catch (e) { console.error("draw", s.name, e); }
+  }
+
+  window.seek = seek;
+  window.promoTotal = TOTAL;
+  window.promoReady = () => ready;
+  window.promoScenes = TIMELINE.map((s) => ({ name: s.name, start: s.start, dur: s.dur }));
+})();
+</script>
+</body>
+</html>
