@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0E1E39">
 <title>PR0JECT — Мои заказы</title>
 <!-- ?v= обязателен: webview Telegram держит старую статику после деплоя. -->
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -44,6 +44,24 @@
 
     <!-- ================= СПИСОК ЗАКАЗОВ ================= -->
     <section id="view-list" class="view view-list is-active">
+
+      <section id="homescreen-card" class="homescreen-card">
+        <div class="homescreen-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="homescreen-body">
+          <span class="homescreen-title">На главный экран</span>
+          <span class="homescreen-text">Трекер как приложение — заказы в одно касание</span>
+        </div>
+        <div class="homescreen-actions">
+          <button id="homescreen-add" class="btn-primary homescreen-add" type="button">
+            <span class="btn-label">Добавить</span>
+          </button>
+          <button id="homescreen-later" class="homescreen-later" type="button">Позже</button>
+        </div>
+      </section>
 
       <div id="loading-state" class="loading-state">
         <div class="skeleton-group">
@@ -201,6 +219,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

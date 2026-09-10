@@ -11,12 +11,56 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
+from google.api_core.retry import Retry, if_transient_error
 
 from bot import channel_analyzer, config
 
 genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
 
 logger = logging.getLogger(__name__)
+
+# Когда дневной free-tier кончается, библиотека по умолчанию ретраит 429
+# и сжигает остаток квоты. На квоте не повторяем запрос — один отказ и стоп.
+QUOTA_REPLY = (
+    "⚠️ Кончилась дневная квота Gemini — текст, голос и разбор каналов "
+    "сейчас не обрабатываю.\n\n"
+    "Кнопки ассистента работают как обычно. Не повторяй сообщение: "
+    "каждый повтор тоже считается. Квота обычно обновляется на следующий день."
+)
+
+
+class GeminiQuotaError(Exception):
+    """Бесплатный лимит Gemini исчерпан — повторный вызов API только ухудшит паузу."""
+
+
+def _is_quota_error(exc: BaseException) -> bool:
+    if isinstance(exc, (google_exceptions.TooManyRequests, google_exceptions.ResourceExhausted)):
+        return True
+    text = str(exc).lower()
+    return "exceeded your current quota" in text or "quota exceeded" in text
+
+
+def _should_retry(exc: BaseException) -> bool:
+    if _is_quota_error(exc):
+        return False
+    return if_transient_error(exc)
+
+
+_REQUEST_OPTIONS = {"retry": Retry(predicate=_should_retry)}
+
+
+def _generate(model, contents, **kwargs):
+    """generate_content без ретраев на квоте. Остальные сбои — как раньше."""
+    try:
+        return model.generate_content(
+            contents, request_options=_REQUEST_OPTIONS, **kwargs
+        )
+    except Exception as exc:
+        if _is_quota_error(exc):
+            logger.warning("Gemini quota exceeded: %s", exc)
+            raise GeminiQuotaError(QUOTA_REPLY) from exc
+        raise
 
 # Описания этапов для Gemini собираются из config.ORDER_STATUSES, чтобы при
 # правке списка этапов не нужно было синхронизировать текст в двух местах.
@@ -368,7 +412,10 @@ def process_message(user_text: str, conversation_history: list = None) -> dict:
     ]
     contents.append({"role": "user", "parts": [user_text]})
 
-    response = model.generate_content(contents)
+    try:
+        response = _generate(model, contents)
+    except GeminiQuotaError as exc:
+        return {"type": "quota", "text": str(exc)}
 
     parts = response.candidates[0].content.parts
     status_args = None
@@ -421,12 +468,13 @@ def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
     как обычный input наравне с текстом). Возвращает только сам текст.
     """
     model = genai.GenerativeModel(model_name=config.GEMINI_MODEL)
-    response = model.generate_content(
+    response = _generate(
+        model,
         [
             {"mime_type": mime_type, "data": audio_bytes},
             "Расшифруй это голосовое сообщение дословно, на языке говорящего. "
             "В ответе верни только сам расшифрованный текст, без кавычек и пояснений.",
-        ]
+        ],
     )
     return response.text.strip()
 
@@ -482,5 +530,5 @@ def analyze_channel(channel_posts_text: str, channel_name: str) -> str:
 Отвечай кратко и по делу, без длинных вступлений."""
 
     model = genai.GenerativeModel(model_name=config.GEMINI_MODEL)
-    response = model.generate_content(prompt)
+    response = _generate(model, prompt)
     return response.text.strip()

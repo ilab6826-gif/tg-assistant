@@ -431,6 +431,8 @@ async def on_channel_link(message: Message) -> None:
         posts_text = channel_analyzer.fetch_channel_posts(username)
         analysis = gemini_service.analyze_channel(posts_text, username)
         await message.answer(analysis)
+    except gemini_service.GeminiQuotaError as e:
+        await message.answer(str(e))
     except ValueError as e:
         await message.answer(f"⚠️ {e}")
     except Exception:
@@ -629,6 +631,10 @@ async def _handle_text(message: Message, text: str) -> None:
     _remember_owner(message)
     history = memory_service.get_history(message.chat.id)
     result = gemini_service.process_message(text, conversation_history=history)
+
+    if result["type"] == "quota":
+        await _reply(message, result["text"])
+        return
 
     if result["type"] == "reminder":
         run_date = scheduler.add_reminder(
@@ -957,6 +963,9 @@ async def on_voice(message: Message) -> None:
         file_info = await bot.get_file(message.voice.file_id)
         file_bytes = await bot.download_file(file_info.file_path)
         transcribed = gemini_service.transcribe_voice(file_bytes.read())
+    except gemini_service.GeminiQuotaError as e:
+        await message.answer(str(e))
+        return
     except Exception:
         logger.exception("Ошибка при расшифровке голосового сообщения")
         await message.answer("⚠️ Не получилось распознать голосовое, попробуй ещё раз или напиши текстом.")

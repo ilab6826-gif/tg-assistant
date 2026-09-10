@@ -95,6 +95,9 @@
   const inviteBonus = document.getElementById("invite-bonus");
   const inviteShare = document.getElementById("invite-share");
   const inviteCopy = document.getElementById("invite-copy");
+  const homescreenCard = document.getElementById("homescreen-card");
+  const homescreenAdd = document.getElementById("homescreen-add");
+  const homescreenLater = document.getElementById("homescreen-later");
 
   let cachedOrders = [];
   let cachedReferral = null;
@@ -579,6 +582,78 @@
     copyInviteLink();
   });
 
+  // ---------- На главный экран ----------
+
+  const HOME_SCREEN_HIDE_KEY = "pr0ject-homescreen-hidden";
+
+  function hideHomeScreenCard() {
+    homescreenCard.classList.remove("is-visible");
+  }
+
+  function showHomeScreenCard() {
+    try {
+      if (window.localStorage && localStorage.getItem(HOME_SCREEN_HIDE_KEY) === "1") return;
+    } catch (err) {}
+    homescreenCard.classList.add("is-visible");
+  }
+
+  function rememberHomeScreenHidden() {
+    try { localStorage.setItem(HOME_SCREEN_HIDE_KEY, "1"); } catch (err) {}
+  }
+
+  function initHomeScreen() {
+    if (!tg || typeof tg.addToHomeScreen !== "function") return;
+    if (typeof tg.isVersionAtLeast === "function" && !tg.isVersionAtLeast("8.0")) return;
+
+    const applyStatus = (status) => {
+      if (status === "added" || status === "unsupported") {
+        hideHomeScreenCard();
+        return;
+      }
+      showHomeScreenCard();
+    };
+
+    try {
+      tg.onEvent("homeScreenAdded", () => {
+        rememberHomeScreenHidden();
+        hideHomeScreenCard();
+        showToast("Иконка на главном экране");
+        notify("success");
+      });
+    } catch (err) {}
+
+    try {
+      tg.onEvent("homeScreenFailed", () => {
+        showToast("Не получилось добавить");
+      });
+    } catch (err) {}
+
+    try {
+      tg.checkHomeScreenStatus(applyStatus);
+    } catch (err) {
+      showHomeScreenCard();
+    }
+  }
+
+  homescreenAdd.addEventListener("click", () => {
+    haptic("medium");
+    if (!tg || typeof tg.addToHomeScreen !== "function") {
+      showToast("Открой трекер в Telegram на телефоне");
+      return;
+    }
+    try {
+      tg.addToHomeScreen();
+    } catch (err) {
+      showToast("Обнови Telegram — эта функция в новых версиях");
+    }
+  });
+
+  homescreenLater.addEventListener("click", () => {
+    haptic("light");
+    rememberHomeScreenHidden();
+    hideHomeScreenCard();
+  });
+
   async function loadOrders({ silent = false } = {}) {
     if (!silent) setLoading(true);
     else refreshBtn.classList.add("is-spinning");
@@ -659,5 +734,6 @@
   // ---------- Старт ----------
 
   syncTopbar();
+  initHomeScreen();
   loadOrders();
 })();

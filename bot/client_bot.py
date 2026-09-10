@@ -228,7 +228,8 @@ async def on_client_start(message: Message, command: CommandObject = None) -> No
     if keyboard:
         await message.answer(
             greeting + "Нажми кнопку ниже, чтобы открыть трекер. "
-            "А когда статус заказа изменится — пришлю уведомление сюда.\n\n"
+            "В приложении можно добавить его на главный экран телефона.\n\n"
+            "Когда статус заказа изменится — пришлю уведомление сюда.\n\n"
             "И ещё: за приглашённых друзей я начисляю бонусы — команда /invite.",
             reply_markup=keyboard,
         )
