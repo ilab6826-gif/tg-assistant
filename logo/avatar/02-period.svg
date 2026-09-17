@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lublinov">
+  <rect width="512" height="512" fill="#111111"/>
+  <g fill="#F3EFE6">
+    <rect x="164" y="118" width="86" height="276"/>
+    <rect x="164" y="308" width="176" height="86"/>
+    <circle cx="402" cy="351" r="43"/>
+  </g>
+</svg>
