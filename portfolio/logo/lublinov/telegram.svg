@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="lublinov">
-  <rect width="1024" height="1024" fill="#111111"/>
-  <defs><mask id="bh"><rect width="1024" height="1024" fill="white"/><circle cx="519.0" cy="587.4" r="49.3" fill="black"/></mask></defs>
-  <g mask="url(#bh)">
-    <line x1="422.6" y1="220.0" x2="422.6" y2="780.0" stroke="#F3EFE6" stroke-width="129.9" stroke-linecap="round"/>
-    <circle cx="519.0" cy="587.4" r="147.8" fill="#F3EFE6"/>
-  </g>
-</svg>
