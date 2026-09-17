@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="#161513" role="img" aria-label="Lublinov mark">
-  <!-- Two carpenter-square L's forming an open frame -->
-  <rect x="18" y="18" width="64" height="18"/>
-  <rect x="18" y="18" width="18" height="64"/>
-  <rect x="38" y="84" width="64" height="18"/>
-  <rect x="84" y="38" width="18" height="64"/>
-</svg>
