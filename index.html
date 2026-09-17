@@ -4,48 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lublinov — UI/UX Designer × Frontend Developer</title>
-  <meta name="description" content="Lublinov — UI/UX, веб-дизайн, frontend и айдентика. Интерфейсы и вёрстка для продуктов. Telegram: @lublinov_layout">
+  <meta name="description" content="Lublinov — UI/UX-дизайнер и frontend-разработчик. Интерфейсы, веб, Telegram Mini Apps. Проектирую продукт и собираю его в код. Telegram: @lublinov_layout">
   <meta name="theme-color" content="#EDE8DF">
   <link rel="canonical" href="https://ilab6826-gif.github.io/tg-assistant/">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Lublinov">
   <meta property="og:title" content="Lublinov — UI/UX Designer × Frontend Developer">
-  <meta property="og:description" content="Интерфейсы, веб-дизайн, frontend и айдентика. Открыт к заказам.">
+  <meta property="og:description" content="Проектирую интерфейсы и собираю их во frontend. Открыт к заказам.">
   <meta property="og:url" content="https://ilab6826-gif.github.io/tg-assistant/">
   <meta property="og:image" content="https://ilab6826-gif.github.io/tg-assistant/assets/velora-cover.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="favicon.svg">
+  <link rel="preload" as="image" href="assets/velora-cover.webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/site.css?v=17">
+  <link rel="stylesheet" href="css/site.css?v=19">
 </head>
 <body>
   <a class="skip" href="#work">К работам</a>
   <header class="wrap nav">
     <a class="mark" href="index.html">Lublinov</a>
-    <ul class="nav-links">
-      <li><a href="#work">Работы</a></li>
-      <li><a href="about.html">О себе</a></li>
-      <li><a href="#contact">Связаться</a></li>
-    </ul>
+    <nav aria-label="Основное">
+      <ul class="nav-links">
+        <li><a href="#work">Работы</a></li>
+        <li><a href="about.html">О себе</a></li>
+        <li><a href="https://t.me/lublinov_layout" target="_blank" rel="noopener noreferrer">Связаться</a></li>
+      </ul>
+    </nav>
   </header>
 
   <main>
     <section class="wrap hero">
-      <p class="kicker">Lublinov</p>
+      <p class="status">Открыт к заказам</p>
       <h1>
         <span class="hero-line">UI/UX Designer</span>
         <span class="hero-line hero-line-soft">× Frontend Developer</span>
       </h1>
-      <p class="lede">Проектирую интерфейсы и собираю их в код. Веб, приложения, айдентика.</p>
+      <p class="lede">Проектирую интерфейсы и собираю их во frontend. Веб, приложения, Telegram Mini Apps.</p>
       <div class="cta-row">
         <a class="btn" href="#work">Посмотреть работы</a>
-        <a class="btn btn-ghost" href="https://t.me/lublinov_layout" target="_blank" rel="noopener">Связаться со мной</a>
-      </div>
-      <div class="hero-foot">
-        <p>Открыт к заказам. Беру продукт целиком: экран, сетка, вёрстка.</p>
-        <span class="kicker">2025–2026</span>
+        <a class="btn btn-ghost" href="https://t.me/lublinov_layout" target="_blank" rel="noopener noreferrer">Связаться</a>
       </div>
     </section>
 
@@ -56,67 +56,75 @@
       </div>
       <div class="work-grid">
         <a class="work" href="work/velora.html" data-reveal>
-          <div class="work-top"><span>01</span><span>Магазин</span></div>
-          <div class="work-media"><img src="assets/velora-cover.png" alt="Интерфейс магазина одежды Velora" width="800" height="500"></div>
-          <h2>Velora</h2>
-          <p>Магазин одежды: витрина, товар, лукбук.</p>
+          <div class="work-top"><span>01</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/velora-cover.webp" alt="Интерфейс магазина одежды Velora: витрина и карточка товара" width="1280" height="720" fetchpriority="high" decoding="async"></div>
+          <h3>Velora</h3>
+          <p class="work-desc">Витрина, карточка товара и лукбук магазина одежды.</p>
           <p class="work-meta">UI/UX · приложение · 2026</p>
+          <p class="work-role">Роль: UI/UX</p>
         </a>
 
         <a class="work" href="work/lumen.html" data-reveal>
-          <div class="work-top"><span>02</span><span>Банк</span></div>
-          <div class="work-media"><img src="assets/lumen-cover.png" alt="Банковское приложение Lumen" width="800" height="500" loading="lazy"></div>
-          <h2>Lumen</h2>
-          <p>Счёт, карта, перевод. Сумма сразу, без лишнего.</p>
+          <div class="work-top"><span>02</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/lumen-cover.webp" alt="Банковское приложение Lumen: обзор счёта и карта" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>Lumen</h3>
+          <p class="work-desc">Счёт, карта и перевод. Сумма сразу, без лишнего.</p>
           <p class="work-meta">UI/UX · приложение · 2026</p>
+          <p class="work-role">Роль: UI/UX</p>
         </a>
 
         <a class="work" href="work/atelier.html" data-reveal>
-          <div class="work-top"><span>03</span><span>Айдентика</span></div>
-          <div class="work-media"><img src="assets/atelier-cover.png" alt="Айдентика Noir Atelier" width="800" height="500" loading="lazy"></div>
-          <h2>Noir Atelier</h2>
-          <p>Парфюмерный дом: имя, печать, бумага.</p>
+          <div class="work-top"><span>03</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/atelier-cover.webp" alt="Айдентика Noir Atelier: имя дома и бумажные носители" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>Noir Atelier</h3>
+          <p class="work-desc">Имя, печать и бумага парфюмерного дома.</p>
           <p class="work-meta">Branding · носители · 2025</p>
+          <p class="work-role">Роль: Branding</p>
         </a>
 
         <a class="work" href="work/orbit.html" data-reveal>
-          <div class="work-top"><span>04</span><span>Сервис</span></div>
-          <div class="work-media"><img src="assets/orbit-cover.png" alt="Дашборд Orbit" width="800" height="500" loading="lazy"></div>
-          <h2>Orbit</h2>
-          <p>Дашборд: цифры, график, таблица.</p>
-          <p class="work-meta">UI/UX · веб · 2026</p>
+          <div class="work-top"><span>04</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/orbit-cover.webp" alt="Веб-дашборд Orbit: метрики, график и таблица" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>Orbit</h3>
+          <p class="work-desc">Кабинет аналитики: цифры, график, таблица.</p>
+          <p class="work-meta">Web Design · веб · 2026</p>
+          <p class="work-role">Роль: UI/UX</p>
         </a>
 
         <a class="work" href="work/aether.html" data-reveal>
-          <div class="work-top"><span>05</span><span>Отель</span></div>
-          <div class="work-media"><img src="assets/aether-cover.png" alt="Приложение бронирования Aether" width="800" height="500" loading="lazy"></div>
-          <h2>Aether</h2>
-          <p>Бронь: дома и карточка комнаты.</p>
+          <div class="work-top"><span>05</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/aether-cover.webp" alt="Приложение бронирования Aether: список домов и карточка комнаты" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>Aether</h3>
+          <p class="work-desc">Поток брони: дома и карточка комнаты.</p>
           <p class="work-meta">UI/UX · приложение · 2025</p>
+          <p class="work-role">Роль: UI/UX</p>
         </a>
 
         <a class="work" href="work/project.html" data-reveal>
-          <div class="work-top"><span>06</span><span>Telegram</span></div>
-          <div class="work-media"><img src="assets/project-cover.png" alt="Мини-приложение PR0JECT" width="800" height="500" loading="lazy"></div>
-          <h2>PR0JECT</h2>
-          <p>Трекер заказа в мини-приложении.</p>
-          <p class="work-meta">UI/UX · frontend · 2026</p>
+          <div class="work-top"><span>06</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/project-cover.webp" alt="Telegram Mini App PR0JECT: трекер заказа" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>PR0JECT</h3>
+          <p class="work-desc">Трекер заказа в Telegram Mini App.</p>
+          <p class="work-meta">Telegram Mini App · frontend · 2026</p>
+          <p class="work-role">Роль: UI/UX, Frontend</p>
         </a>
 
         <a class="work" href="work/mv.html" data-reveal>
-          <div class="work-top"><span>07</span><span>Логотип</span></div>
-          <div class="work-media"><img src="assets/mv-cover.png" alt="Логотип MV Vape Shop на пакете" width="800" height="500" loading="lazy"></div>
-          <h2>MV Vape Shop</h2>
-          <p>Знак на заказ: пакет, карта, вывеска.</p>
+          <div class="work-top"><span>07</span><span>Заказ</span></div>
+          <div class="work-media"><img src="assets/mv-cover.webp" alt="Логотип MV Vape Shop на пакете" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>MV Vape Shop</h3>
+          <p class="work-desc">Заказной знак: пакет, карта, вывеска.</p>
           <p class="work-meta">Branding · логотип · 2025</p>
+          <p class="work-role">Роль: Branding</p>
         </a>
 
         <a class="work" href="work/nocturne.html" data-reveal>
-          <div class="work-top"><span>08</span><span>Фестиваль</span></div>
-          <div class="work-media"><img src="assets/nocturne-cover.png" alt="Афиши кинофестиваля Nocturne" width="800" height="500" loading="lazy"></div>
-          <h2>Nocturne</h2>
-          <p>Афиша и билет кинофестиваля.</p>
-          <p class="work-meta">Графика · кампания · 2025</p>
+          <div class="work-top"><span>08</span><span>Концепт</span></div>
+          <div class="work-media"><img src="assets/nocturne-cover.webp" alt="Афиша и билет кинофестиваля Nocturne" width="1280" height="720" loading="lazy" decoding="async"></div>
+          <h3>Nocturne</h3>
+          <p class="work-desc">Афиша и билет кинофестиваля.</p>
+          <p class="work-meta">Branding · кампания · 2025</p>
+          <p class="work-role">Роль: Branding</p>
         </a>
       </div>
     </section>
@@ -126,61 +134,77 @@
         <h2>О себе</h2>
         <a class="kicker" href="about.html">Подробнее</a>
       </div>
-      <div class="split">
-        <div>
-          <p class="body-copy">Lublinov. Пришёл из разработки. Делаю интерфейсы, веб и айдентику — и собираю это в рабочий фронтенд.</p>
-          <p class="body-copy">Беру заказы. Если есть задача — напишите в Telegram.</p>
-        </div>
-        <ul class="services">
-          <li>UI/UX <span>приложения, веб</span></li>
-          <li>Web design <span>сайты, кабинеты</span></li>
-          <li>Frontend <span>вёрстка, интерактив</span></li>
-          <li>Branding <span>знак, носители</span></li>
-        </ul>
-      </div>
+      <p class="body-copy">Пришёл из разработки. Поэтому понимаю не только визуальную часть интерфейса, но и то, как дизайн превращается в работающий продукт.</p>
     </section>
 
     <section class="wrap section" id="services" data-reveal>
       <div class="section-head">
         <h2>Что я делаю</h2>
       </div>
-      <div class="split">
-        <p class="lede">От сетки экрана до вёрстки, которую можно отдать в прод. Один подрядчик на дизайн и фронтенд.</p>
-        <ul class="services">
-          <li>Интерфейсы продуктов <span>поток, состояния, сетка</span></li>
-          <li>Лендинги и кабинеты <span>типографика, адаптив</span></li>
-          <li>Telegram Mini Apps <span>экраны и вёрстка</span></li>
-          <li>Айдентика <span>знак, бумага, вывеска</span></li>
-        </ul>
+      <div class="service-block">
+        <article class="service-item">
+          <h3>UI/UX Design</h3>
+          <p>Интерфейсы приложений и веб-сервисов.</p>
+        </article>
+        <article class="service-item">
+          <h3>Web Design</h3>
+          <p>Сайты, лендинги и личные кабинеты.</p>
+        </article>
+        <article class="service-item">
+          <h3>Frontend</h3>
+          <p>HTML, CSS, JavaScript и интерактивные интерфейсы.</p>
+        </article>
+        <article class="service-item">
+          <h3>Telegram Mini Apps</h3>
+          <p>Проектирование и frontend мини-приложений.</p>
+        </article>
+        <article class="service-item">
+          <h3>Branding</h3>
+          <p>Логотипы, визуальные системы и носители.</p>
+        </article>
       </div>
+    </section>
+
+    <section class="wrap section" id="process" data-reveal>
+      <div class="section-head">
+        <h2>Как проходит работа</h2>
+      </div>
+      <ol class="process">
+        <li><small>01</small><span>Задача</span></li>
+        <li><small>02</small><span>Структура</span></li>
+        <li><small>03</small><span>Дизайн</span></li>
+        <li><small>04</small><span>Frontend</span></li>
+        <li><small>05</small><span>Финальная передача</span></li>
+      </ol>
     </section>
 
     <section class="wrap section" id="skills" data-reveal>
       <div class="section-head">
         <h2>Инструменты</h2>
       </div>
-      <ul class="skills">
-        <li>Дизайн <span>Figma, типографика, сетка</span></li>
-        <li>Frontend <span>HTML, CSS, JavaScript</span></li>
-        <li>Продукт <span>Telegram Mini Apps, веб</span></li>
-        <li>Бренд <span>знак, носители, кампания</span></li>
+      <ul class="tools">
+        <li>Figma</li>
+        <li>HTML</li>
+        <li>CSS</li>
+        <li>JavaScript</li>
+        <li>Git</li>
+        <li>Telegram Mini Apps</li>
       </ul>
     </section>
 
     <section class="wrap contact" id="contact" data-reveal>
       <p class="kicker">Контакт</p>
-      <h2>Есть задача — напишите.</h2>
-      <p class="lede">Отвечаю сам в Telegram. Интерфейсы, вёрстка, айдентика.</p>
+      <h2>Есть задача?</h2>
+      <p class="lede">Расскажите, что нужно сделать — обсудим задачу и формат работы.</p>
       <div class="cta-row">
-        <a class="btn" href="https://t.me/lublinov_layout" target="_blank" rel="noopener">Написать в Telegram</a>
-        <a class="btn btn-ghost" href="#work">Смотреть работы</a>
+        <a class="btn" href="https://t.me/lublinov_layout" target="_blank" rel="noopener noreferrer">Написать в Telegram</a>
       </div>
     </section>
   </main>
 
   <footer class="wrap foot">
     <span>© Lublinov, 2026</span>
-    <a href="https://t.me/lublinov_layout" target="_blank" rel="noopener">@lublinov_layout</a>
+    <a href="https://t.me/lublinov_layout" target="_blank" rel="noopener noreferrer">@lublinov_layout</a>
   </footer>
   <script src="js/site.js" defer></script>
 </body>
